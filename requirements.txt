@@ -12,3 +12,6 @@ openai
 langchain-core
 mkdocs
 mkdocs-material
+httpx
+supabase
+pydantic

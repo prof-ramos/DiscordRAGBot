@@ -1,6 +1,6 @@
-# 🤖 Bot Discord RAG PT-BR com OpenRouter
+# 🤖 Bot Discord RAG PT-BR com OpenRouter e Supabase
 
-Bot Discord com RAG (Retrieval-Augmented Generation) otimizado para português, utilizando Chroma para busca vetorial, embeddings da OpenAI e OpenRouter para acesso a modelos LLM.
+Bot Discord com RAG (Retrieval-Augmented Generation) otimizado para português, utilizando Supabase com pgvector para busca vetorial, embeddings da OpenAI e OpenRouter para acesso a modelos LLM.
 
 ## 📋 Funcionalidades
 
@@ -11,13 +11,14 @@ Bot Discord com RAG (Retrieval-Augmented Generation) otimizado para português, 
   
 - **RAG Pipeline:**
   - Embeddings multilíngues via OpenAI API (text-embedding-3-small)
-  - Busca vetorial com Chroma
+  - Busca vetorial com Supabase vectorstore (pgvector)
   - Integração com OpenRouter (Claude, GPT, Gemini, Llama, etc.)
   
 - **Recursos:**
   - Respostas com citação de fontes
   - Divisão automática de mensagens longas
   - Suporte a PDFs
+  - Configuração de níveis de filtro de conteúdo (conservador, moderado, liberal)
 
 ## 🚀 Configuração
 
@@ -56,15 +57,30 @@ Bot Discord com RAG (Retrieval-Augmented Generation) otimizado para português, 
 2. Vá em **Settings** → **API Keys** → **Create Key**
 3. Copie sua chave API
 
-### 5. Configurar Variáveis de Ambiente
+### 5. Configurar Supabase
 
-Adicione as seguintes chaves na aba "Secrets" do Replit:
+1. Crie uma conta em [Supabase](https://supabase.com/)
+2. Crie um novo projeto
+3. No painel do projeto, anote:
+   - **Project URL** (ex: https://seuprojeto.supabase.co)
+   - **Project API Key** (seção Settings → API)
+
+4. Configure o banco de dados para vetores:
+   - Acesse o painel SQL do Supabase
+   - Execute: `CREATE EXTENSION IF NOT EXISTS vector;`
+   - Execute o script de criação da tabela (veja docs/supabase_setup.md)
+
+### 6. Configurar Variáveis de Ambiente
+
+Adicione as seguintes chaves no arquivo `.env`:
 
 ```bash
 DISCORD_TOKEN=seu_token_aqui
 OPENAI_API_KEY=sua_chave_openai_aqui
 OPENROUTER_API_KEY=sua_chave_openrouter_aqui
 OPENROUTER_MODEL=minimax/minimax-m2:free
+SUPABASE_URL=sua_url_supabase_aqui
+SUPABASE_API_KEY=sua_chave_supabase_aqui
 #OPENROUTER_MODEL_FALLBACK=anthropic/claude-3-haiku  # Opcional
 ```
 
@@ -77,9 +93,16 @@ OPENROUTER_MODEL=minimax/minimax-m2:free
 
 ## 📦 Instalação
 
-As dependências já estão instaladas no Replit. Se precisar reinstalar:
-
 ```bash
+# Clonar repositório
+git clone seu_repositorio
+cd DiscordRAGBot
+
+# Criar ambiente virtual
+python -m venv venv
+source venv/bin/activate  # No Windows: venv\Scripts\activate
+
+# Instalar dependências
 pip install -r requirements.txt
 ```
 
@@ -106,7 +129,7 @@ Isso irá:
 - Carregar todos os PDFs da pasta `data/`
 - Dividir em chunks otimizados
 - Criar embeddings via OpenAI API (text-embedding-3-small)
-- Salvar banco vetorial Chroma em `vectorstore/`
+- Salvar embeddings no vectorstore do Supabase
 
 ## 🤖 Executar o Bot
 
@@ -143,17 +166,18 @@ Envie qualquer mensagem direta ao bot
 
 ```
 .
-├── data/              # PDFs para indexar (adicione seus arquivos aqui)
-├── vectorstore/       # Banco vetorial Chroma (gerado automaticamente)
-├── logs/              # Logs do bot (gerado automaticamente)
-│   └── bot.log        # Arquivo principal de logs com rotação
-├── load.py            # Script de indexação de documentos
-├── bot.py             # Bot Discord com RAG
-├── requirements.txt   # Dependências Python
-├── .env.example       # Template de configuração
-├── .gitignore         # Arquivos ignorados pelo git
-├── README.md          # Este arquivo
-└── replit.md          # Documentação técnica do projeto
+├── data/                  # PDFs para indexar (adicione seus arquivos aqui)
+├── logs/                  # Logs do bot (gerado automaticamente)
+│   └── bot.log            # Arquivo principal de logs com rotação
+├── docs/                  # Documentação adicional
+│   └── supabase_setup.md  # Configuração do vectorstore no Supabase
+├── load.py                # Script de indexação de documentos
+├── bot.py                 # Bot Discord com RAG
+├── requirements.txt       # Dependências Python
+├── .env.example           # Template de configuração
+├── .gitignore             # Arquivos ignorados pelo git
+├── README.md              # Este arquivo
+└── replit.md              # Documentação técnica do projeto
 ```
 
 ## 📊 Sistema de Logs
@@ -218,6 +242,14 @@ grep "Usuário: 123456789" logs/bot.log
 tail -n 50 logs/bot.log
 ```
 
+## 🗄️ Configuração do Supabase Vectorstore
+
+Para usar o Supabase como vectorstore, siga os passos no arquivo `docs/supabase_setup.md`:
+
+1. Habilite a extensão `pgvector`
+2. Crie a tabela `documents` com colunas apropriadas para embeddings
+3. Crie a função `match_documents` para busca vetorial
+
 ## ⚡ Otimizações
 
 Para reduzir custos e melhorar performance:
@@ -238,6 +270,8 @@ OPENROUTER_MODEL=anthropic/claude-3-haiku  # Mais barato que sonnet
 - ⚠️ **Nunca** commite o arquivo `.env` (já está no `.gitignore`)
 - 🔒 Mantenha seus tokens e chaves API em segredo
 - 🔄 Regenere tokens se forem expostos acidentalmente
+- 🗃️ **Importante**: Não use em produção sem medidas de segurança adicionais
+- 🔐 Use tokens com escopo limitado e prazo de validade
 
 ## 📝 Próximos Recursos
 

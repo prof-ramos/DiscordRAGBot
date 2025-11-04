@@ -65,6 +65,7 @@ nav:
   - Arquitetura: architecture.md
   - Instalação: installation.md
   - Uso: usage.md
+  - Configuração do Supabase: supabase_setup.md
   - Logs: logs.md
   - Referência API: api.md
   - Troubleshooting: troubleshooting.md

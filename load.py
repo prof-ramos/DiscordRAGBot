@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
+from supabase import create_client, Client
+from langchain_community.vectorstores import SupabaseVectorStore
 
 load_dotenv()
 
@@ -75,18 +76,34 @@ def create_embeddings():
     return embeddings
 
 
+def get_supabase_client() -> Client:
+    """Obtém cliente do Supabase"""
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_api_key = os.getenv("SUPABASE_API_KEY")
+    
+    if not supabase_url or not supabase_api_key:
+        raise ValueError("SUPABASE_URL e SUPABASE_API_KEY devem estar definidos no .env")
+    
+    return create_client(supabase_url, supabase_api_key)
+
+
 def create_vectorstore(chunks, embeddings):
-    """Cria e salva Chroma vectorstore"""
-    print("[INFO] Criando vectorstore Chroma...")
+    """Cria e salva vectorstore no Supabase"""
+    print("[INFO] Criando vectorstore no Supabase...")
     print("[⏳] Isso pode levar alguns minutos...")
     
-    vectorstore = Chroma.from_documents(
+    supabase_client = get_supabase_client()
+    
+    # Criar vectorstore usando Supabase
+    vectorstore = SupabaseVectorStore.from_documents(
         documents=chunks,
         embedding=embeddings,
-        persist_directory=INDEX_DIR
+        client=supabase_client,
+        table_name="documents",  # Nome da tabela onde os embeddings serão armazenados
+        query_name="match_documents"  # Nome da função de consulta
     )
     
-    print(f"[✅] Vectorstore salvo em '{INDEX_DIR}'")
+    print("[✅] Vectorstore salvo no Supabase")
     
     return vectorstore
 
@@ -119,7 +136,7 @@ def main():
     print("✅ INDEXAÇÃO CONCLUÍDA COM SUCESSO!")
     print("="*60)
     print(f"📊 Total de vetores: {num_vectors}")
-    print(f"📁 Localização: {INDEX_DIR}/")
+    print(f"📁 Localização: Supabase (tabela 'documents')")
     print("\n💡 Próximo passo: Execute 'python bot.py' para iniciar o bot")
     print("="*60 + "\n")
 

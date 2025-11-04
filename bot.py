@@ -8,7 +8,8 @@ from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_community.vectorstores import Chroma
+from supabase import create_client, Client
+from langchain_community.vectorstores import SupabaseVectorStore
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
@@ -139,6 +140,16 @@ retriever = None
 llm = None
 vectorstore_loaded = False
 
+def get_supabase_client() -> Client:
+    """Obtém cliente do Supabase"""
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_api_key = os.getenv("SUPABASE_API_KEY")
+    
+    if not supabase_url or not supabase_api_key:
+        raise ValueError("SUPABASE_URL e SUPABASE_API_KEY devem estar definidos no .env")
+    
+    return create_client(supabase_url, supabase_api_key)
+
 try:
     print("[INFO] Carregando RAG...")
     logger.info("🔄 Iniciando carregamento do RAG...")
@@ -146,30 +157,30 @@ try:
         model="text-embedding-3-small"
     )
 
-    if not os.path.exists(INDEX_PATH):
-        print(f"[⚠️] Vectorstore não encontrado em '{INDEX_PATH}'")
-        print("[💡] Execute 'python load.py' primeiro para indexar seus documentos")
-        logger.warning(f"⚠️ Vectorstore não encontrado em '{INDEX_PATH}'")
-        vectorstore_loaded = False
-    else:
-        db = Chroma(
-            persist_directory=INDEX_PATH,
-            embedding_function=embeddings
-        )
+    # Tenta conectar ao vectorstore no Supabase
+    supabase_client = get_supabase_client()
+    
+    # Inicializa o vectorstore usando Supabase
+    vectorstore = SupabaseVectorStore(
+        client=supabase_client,
+        embedding=embeddings,
+        table_name="documents",
+        query_name="match_documents"
+    )
 
-        retriever = db.as_retriever(search_kwargs={"k": K_DOCS})
+    retriever = vectorstore.as_retriever(search_kwargs={"k": K_DOCS})
 
-        llm = ChatOpenAI(
-            model=OPENROUTER_MODEL,
-            api_key=OPENROUTER_API_KEY,
-            base_url="https://openrouter.ai/api/v1",
-            temperature=0.7,
-            model_kwargs={"max_tokens": 1000}
-        )
+    llm = ChatOpenAI(
+        model=OPENROUTER_MODEL,
+        api_key=OPENROUTER_API_KEY,
+        base_url="https://openrouter.ai/api/v1",
+        temperature=0.7,
+        model_kwargs={"max_tokens": 1000}
+    )
 
-        vectorstore_loaded = True
-        print("[✅] RAG carregado com sucesso.")
-        logger.info(f"✅ RAG carregado | Modelo: {OPENROUTER_MODEL} | K_DOCS: {K_DOCS}")
+    vectorstore_loaded = True
+    print("[✅] RAG carregado com sucesso.")
+    logger.info(f"✅ RAG carregado | Modelo: {OPENROUTER_MODEL} | K_DOCS: {K_DOCS}")
 except Exception as e:
     print(f"[❌] Erro ao carregar RAG: {e}")
     logger.exception(f"❌ Erro ao carregar RAG | Erro: {str(e)}")
@@ -184,7 +195,7 @@ async def processar_pergunta(question: str, guild_id=None, user_id=None, tipo="R
         return ("⚠️ **Bot ainda não está pronto!**\n\n"
                 "O vectorstore não foi carregado. Por favor:\n"
                 "1. Adicione arquivos PDF na pasta `data/`\n"
-                "2. Execute `python load.py` para indexar os documentos\n"
+                "2. Execute `python load.py` para indexar os documentos no Supabase\n"
                 "3. Reinicie o bot"), []
     
     try:
