@@ -1,0 +1,387 @@
+## 🤖 Bot Discord RAG PT-BR com OpenRouter
+
+### 📂 Estrutura atualizada
+
+```
+rag-ptbr/
+├── data/
+├── vectorstore/
+├── load.py
+├── bot.py              # ← NOVO
+├── requirements.txt    # ← ATUALIZADO
+├── .env                # ← ATUALIZADO
+└── README.md
+```
+
+---
+
+## 🧾 requirements.txt (atualizado)
+
+```txt
+langchain
+faiss-cpu
+sentence-transformers
+torch
+python-dotenv
+tiktoken
+PyPDF2
+discord.py
+openai
+```
+
+---
+
+## 🔑 .env (atualizado)
+
+```txt
+DISCORD_TOKEN=seu_token_do_bot_discord
+OPENROUTER_API_KEY=sua_key_openrouter
+OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
+```
+
+---
+
+## 🤖 bot.py — Bot Discord
+
+```python
+import os
+import discord
+from discord import app_commands
+from discord.ext import commands
+from dotenv import load_dotenv
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.chat_models import ChatOpenAI
+from langchain.chains import RetrievalQA
+
+load_dotenv()
+
+# Configuração
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
+INDEX_PATH = "vectorstore"
+K_DOCS = 5
+
+# Intents do Discord
+intents = discord.Intents.default()
+intents.message_content = True
+intents.dm_messages = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# Inicializar RAG
+print("[INFO] Carregando RAG...")
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+    model_kwargs={"device": "cpu"},
+    encode_kwargs={"batch_size": 8}
+)
+
+db = FAISS.load_local(
+    INDEX_PATH,
+    embeddings,
+    allow_dangerous_deserialization=True
+)
+
+retriever = db.as_retriever(search_kwargs={"k": K_DOCS})
+
+# LLM com OpenRouter
+llm = ChatOpenAI(
+    model=OPENROUTER_MODEL,
+    openai_api_key=OPENROUTER_API_KEY,
+    openai_api_base="https://openrouter.ai/api/v1",
+    temperature=0,
+    max_tokens=1000
+)
+
+qa_chain = RetrievalQA.from_chain_type(
+    llm=llm,
+    retriever=retriever,
+    chain_type="stuff",
+    return_source_documents=True
+)
+
+print("[✅] RAG carregado com sucesso.")
+
+
+async def processar_pergunta(question: str) -> tuple[str, list]:
+    """Processa pergunta no RAG e retorna resposta + fontes"""
+    try:
+        result = qa_chain({"query": question})
+        resposta = result["result"]
+        fontes = result.get("source_documents", [])
+        return resposta, fontes
+    except Exception as e:
+        return f"❌ Erro ao processar: {str(e)}", []
+
+
+async def enviar_resposta_longa(channel, resposta: str, fontes: list):
+    """Divide resposta longa em múltiplas mensagens se necessário"""
+    # Resposta principal
+    if len(resposta) <= 2000:
+        await channel.send(resposta)
+    else:
+        # Dividir em chunks de 2000 caracteres
+        chunks = [resposta[i:i+2000] for i in range(0, len(resposta), 2000)]
+        for chunk in chunks:
+            await channel.send(chunk)
+    
+    # Fontes (opcional)
+    if fontes:
+        fontes_texto = "\n\n**📚 Fontes:**\n"
+        for i, doc in enumerate(fontes[:3], 1):  # Limitar a 3 fontes
+            fonte = doc.metadata.get("source", "N/A")
+            fontes_texto += f"{i}. `{fonte}`\n"
+        
+        if len(fontes_texto) <= 2000:
+            await channel.send(fontes_texto)
+
+
+@bot.event
+async def on_ready():
+    print(f"[✅] Bot conectado como {bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"[✅] {len(synced)} comandos sincronizados")
+    except Exception as e:
+        print(f"[❌] Erro ao sincronizar comandos: {e}")
+
+
+@bot.tree.command(name="ask", description="Faz uma pergunta ao RAG")
+@app_commands.describe(pergunta="Sua pergunta")
+async def ask(interaction: discord.Interaction, pergunta: str):
+    """Comando /ask para fazer perguntas"""
+    await interaction.response.defer(thinking=True)
+    
+    resposta, fontes = await processar_pergunta(pergunta)
+    
+    await interaction.followup.send(resposta)
+    
+    if fontes:
+        fontes_texto = "\n**📚 Fontes:**\n"
+        for i, doc in enumerate(fontes[:3], 1):
+            fonte = doc.metadata.get("source", "N/A")
+            fontes_texto += f"{i}. `{fonte}`\n"
+        
+        if len(fontes_texto) <= 2000:
+            await interaction.followup.send(fontes_texto)
+
+
+@bot.event
+async def on_message(message: discord.Message):
+    # Ignorar mensagens do próprio bot
+    if message.author == bot.user:
+        return
+    
+    # Processar comandos normais
+    await bot.process_commands(message)
+    
+    # Responder quando mencionado
+    if bot.user.mentioned_in(message) and not message.mention_everyone:
+        # Remover menção da pergunta
+        pergunta = message.content.replace(f'<@{bot.user.id}>', '').strip()
+        
+        if not pergunta:
+            await message.channel.send("❓ Faça uma pergunta após me mencionar!")
+            return
+        
+        async with message.channel.typing():
+            resposta, fontes = await processar_pergunta(pergunta)
+            await enviar_resposta_longa(message.channel, resposta, fontes)
+    
+    # Responder em DM
+    elif isinstance(message.channel, discord.DMChannel):
+        if not message.content.strip():
+            await message.channel.send("❓ Envie sua pergunta!")
+            return
+        
+        async with message.channel.typing():
+            resposta, fontes = await processar_pergunta(message.content)
+            await enviar_resposta_longa(message.channel, resposta, fontes)
+
+
+@bot.event
+async def on_error(event, *args, **kwargs):
+    print(f"[❌] Erro no evento {event}: {args}")
+
+
+# Rodar bot
+if __name__ == "__main__":
+    if not DISCORD_TOKEN:
+        print("[❌] DISCORD_TOKEN não encontrado no .env")
+        exit(1)
+    if not OPENROUTER_API_KEY:
+        print("[❌] OPENROUTER_API_KEY não encontrado no .env")
+        exit(1)
+    
+    bot.run(DISCORD_TOKEN)
+```
+
+---
+
+## 🔧 Configuração Discord Bot
+
+### 1. Criar bot no Discord Developer Portal
+
+```
+https://discord.com/developers/applications
+```
+
+1. **New Application** → Nome do bot
+2. **Bot** → Add Bot
+3. **Copy Token** → Colar no `.env`
+4. **Privileged Gateway Intents** → Ativar:
+   - MESSAGE CONTENT INTENT ✅
+   - DIRECT MESSAGES ✅
+   - SERVER MESSAGES ✅
+
+### 2. Gerar URL de convite
+
+```
+OAuth2 → URL Generator
+
+Scopes:
+✅ bot
+✅ applications.commands
+
+Bot Permissions:
+✅ Send Messages
+✅ Read Message History
+✅ Use Slash Commands
+✅ Add Reactions
+```
+
+Copiar URL e adicionar bot ao servidor.
+
+---
+
+## 🔑 Configurar OpenRouter
+
+### 1. Criar conta
+
+```
+https://openrouter.ai/
+```
+
+### 2. Gerar API Key
+
+```
+Settings → API Keys → Create Key
+```
+
+### 3. Modelos recomendados
+
+```txt
+# .env - opções de modelo
+
+# Melhor qualidade
+OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
+
+# Balanceado
+OPENROUTER_MODEL=anthropic/claude-3-haiku
+
+# Mais barato
+OPENROUTER_MODEL=google/gemini-flash-1.5
+
+# Alternativa local
+OPENROUTER_MODEL=meta-llama/llama-3.1-70b-instruct
+```
+
+---
+
+## 🚀 Execução
+
+### 1. Indexar documentos
+
+```bash
+python load.py
+```
+
+### 2. Rodar bot
+
+```bash
+python bot.py
+```
+
+### 3. Testar
+
+**No servidor Discord:**
+```
+@BotName Qual a capital do Brasil?
+```
+
+**Comando slash:**
+```
+/ask pergunta: O que é LGPD?
+```
+
+**DM:**
+```
+Apenas envie mensagem direta ao bot
+```
+
+---
+
+## 📊 Monitoramento
+
+O bot imprime logs:
+
+```
+[INFO] Carregando RAG...
+[✅] RAG carregado com sucesso.
+[✅] Bot conectado como RagBot#1234
+[✅] 1 comandos sincronizados
+```
+
+---
+
+## ⚡ Otimizações M3/8GB
+
+Se consumir muita RAM:
+
+```python
+# Trocar modelo de embedding (linha 25):
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    model_kwargs={"device": "cpu"},
+    encode_kwargs={"batch_size": 4}  # Reduzir batch
+)
+
+# Reduzir contexto (linha 17):
+K_DOCS = 3  # De 5 para 3
+
+# Limitar tokens OpenRouter (linha 40):
+max_tokens=500  # De 1000 para 500
+```
+
+---
+
+## 🛡️ Segurança
+
+```python
+# Adicionar rate limiting (opcional)
+from collections import defaultdict
+from datetime import datetime, timedelta
+
+user_cooldowns = defaultdict(lambda: datetime.min)
+COOLDOWN = 5  # segundos
+
+# No on_message, adicionar:
+if (datetime.now() - user_cooldowns[message.author.id]).seconds < COOLDOWN:
+    await message.channel.send("⏳ Aguarde alguns segundos...")
+    return
+user_cooldowns[message.author.id] = datetime.now()
+```
+
+---
+
+## 🔧 Próximos recursos
+
+1. **Logs persistentes** (SQLite)
+2. **Admin commands** (recarregar índice, stats)
+3. **Multi-idioma**
+4. **Feedback system** (👍/👎)
+5. **Deploy em VPS/Railway**
+
+Quer implementar algum desses ou testar primeiro?
