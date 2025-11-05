@@ -1,58 +1,251 @@
+# ============================================================================
+# Discord RAG Bot - Project Configuration
+# ============================================================================
+# This file configures the entire Python project including dependencies,
+# build system, and development tools.
+# ============================================================================
+
+[build-system]
+requires = ["setuptools>=68.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# ============================================================================
+# Project Metadata
+# ============================================================================
+
+[project]
+name = "discord-rag-bot"
+version = "2.0.0"
+description = "Production-ready Discord bot with RAG capabilities using Supabase and OpenAI"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Professor Ramos", email = "prof.ramos@example.com"},
+]
+keywords = [
+    "discord",
+    "bot",
+    "rag",
+    "ai",
+    "llm",
+    "openai",
+    "supabase",
+    "vector-database",
+    "embeddings",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Chat",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+
+# ============================================================================
+# Core Dependencies
+# ============================================================================
+
+dependencies = [
+    # Core Framework
+    "discord.py>=2.3.0",
+
+    # LangChain Stack
+    "langchain>=0.1.0",
+    "langchain-community>=0.0.20",
+    "langchain-openai>=0.0.5",
+    "langchain-text-splitters>=0.0.1",
+    "langchain-core>=0.1.0",
+
+    # AI/ML
+    "openai>=1.0.0",
+    "tiktoken>=0.5.0",
+
+    # Vector Store & Database
+    "supabase>=2.0.0",
+
+    # PDF Processing
+    "pypdf>=3.17.0",
+
+    # Data Validation & Settings
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+
+    # Configuration
+    "python-dotenv>=1.0.0",
+
+    # HTTP Client
+    "httpx>=0.25.0",
+]
+
+# ============================================================================
+# Optional Dependencies (Extras)
+# ============================================================================
+
+[project.optional-dependencies]
+
+# Development tools
+dev = [
+    # Testing
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "pytest-xdist>=3.5.0",  # Parallel test execution
+
+    # Code Quality
+    "ruff>=0.1.9",
+    "black>=23.12.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.6.0",
+
+    # Type Stubs
+    "types-requests>=2.31.0",
+
+    # Documentation
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.24.0",
+]
+
+# Production extras
+chromadb = ["chromadb>=0.4.0"]  # Alternative vector store
+
+# All extras
+all = [
+    "discord-rag-bot[dev,chromadb]",
+]
+
+# ============================================================================
+# Project URLs
+# ============================================================================
+
+[project.urls]
+Homepage = "https://github.com/prof-ramos/DiscordRAGBot"
+Documentation = "https://github.com/prof-ramos/DiscordRAGBot/blob/main/README.md"
+Repository = "https://github.com/prof-ramos/DiscordRAGBot"
+Issues = "https://github.com/prof-ramos/DiscordRAGBot/issues"
+
+# ============================================================================
+# Entry Points (Console Scripts)
+# ============================================================================
+
+[project.scripts]
+discord-rag-bot = "src.cli:main"
+rag-bot-load = "src.cli:load_documents"
+rag-bot-stats = "src.cli:show_stats"
+
+# ============================================================================
+# Tool Configuration: Black (Code Formatter)
+# ============================================================================
+
 [tool.black]
 line-length = 88
-target-version = ['py311']
+target-version = ['py311', 'py312']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
-  # directories
+  # Directories
   \.eggs
   | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
   | \.venv
   | venv
+  | _build
+  | buck-out
   | build
   | dist
+  | migrations
+  | \.local
 )/
 '''
+
+# ============================================================================
+# Tool Configuration: Ruff (Linter)
+# ============================================================================
 
 [tool.ruff]
 line-length = 88
 target-version = "py311"
 
+# Enable these rule categories
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
-    "ARG", # flake8-unused-arguments
-    "SIM", # flake8-simplify
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "ARG",  # flake8-unused-arguments
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+    "PTH",  # flake8-use-pathlib
+    "ERA",  # eradicate (commented code)
+    "PL",   # pylint
+    "RUF",  # ruff-specific rules
 ]
 
+# Ignore these specific rules
 ignore = [
-    "E501",  # line too long (handled by black)
-    "B008",  # do not perform function calls in argument defaults
+    "E501",   # line too long (handled by black)
+    "B008",   # do not perform function calls in argument defaults
+    "PLR0913", # too many arguments
+    "PLR0912", # too many branches
+    "PLR2004", # magic value comparison
+]
+
+# Exclude these paths
+extend-exclude = [
+    "migrations",
+    "docs",
+    ".venv",
+    "venv",
 ]
 
 [tool.ruff.per-file-ignores]
-"__init__.py" = ["F401"]  # unused imports
-"tests/**/*.py" = ["ARG"]  # unused arguments in tests
+"__init__.py" = ["F401", "F403"]  # unused imports
+"tests/**/*.py" = ["ARG", "PLR2004"]  # unused arguments, magic values
+"src/cli.py" = ["T201"]  # allow print statements in CLI
+
+[tool.ruff.isort]
+known-first-party = ["src"]
+force-sort-within-sections = true
+
+[tool.ruff.mccabe]
+max-complexity = 10
+
+# ============================================================================
+# Tool Configuration: MyPy (Type Checker)
+# ============================================================================
 
 [tool.mypy]
 python_version = "3.11"
+strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = false  # Discord.py decorators
 no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 strict_equality = true
+show_error_codes = true
+show_column_numbers = true
+pretty = true
 
+# Ignore missing imports for these modules
 [[tool.mypy.overrides]]
 module = [
     "discord.*",
@@ -60,30 +253,128 @@ module = [
     "langchain_community.*",
     "langchain_openai.*",
     "langchain_core.*",
+    "langchain_text_splitters.*",
     "supabase.*",
+    "chromadb.*",
+    "tiktoken.*",
 ]
 ignore_missing_imports = true
 
+# ============================================================================
+# Tool Configuration: Pytest (Testing Framework)
+# ============================================================================
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-ra",                    # Show summary of all test outcomes
+    "--strict-markers",       # Strict marker checking
+    "--strict-config",        # Strict config checking
+    "--cov=src",              # Coverage for src directory
+    "--cov-report=term-missing:skip-covered",  # Show missing lines
+    "--cov-report=html",      # Generate HTML coverage report
+    "--cov-report=xml",       # Generate XML coverage report (for CI)
+    "--cov-fail-under=80",    # Fail if coverage below 80%
+    "--tb=short",             # Shorter traceback format
+    "--asyncio-mode=auto",    # Auto-detect async tests
+]
+asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "discord: marks tests that require Discord mocks",
+    "database: marks tests that require database access",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# ============================================================================
+# Tool Configuration: Coverage.py
+# ============================================================================
+
 [tool.coverage.run]
 source = ["src"]
+branch = true
+parallel = true
 omit = [
     "*/tests/*",
     "*/__init__.py",
     "*/conftest.py",
+    "src/cli.py",  # CLI has print statements
 ]
 
 [tool.coverage.report]
 precision = 2
+show_missing = true
+skip_covered = false
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
+    "def __str__",
     "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
     "raise AssertionError",
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
     "@abstractmethod",
+    "@abc.abstractmethod",
+    "class .*\\bProtocol\\):",
+    "@overload",
 ]
 
-[build-system]
-requires = ["setuptools>=45", "wheel"]
-build-backend = "setuptools.build_meta"
+[tool.coverage.html]
+directory = "htmlcov"
+
+# ============================================================================
+# Tool Configuration: Setuptools
+# ============================================================================
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+exclude = ["tests*", "docs*", "migrations*"]
+
+[tool.setuptools.package-data]
+src = ["py.typed"]
+
+# ============================================================================
+# Tool Configuration: Bandit (Security Linter)
+# ============================================================================
+
+[tool.bandit]
+exclude_dirs = ["tests", "migrations"]
+skips = ["B101"]  # assert_used (OK in tests)
+
+# ============================================================================
+# Tool Configuration: Interrogate (Docstring Coverage)
+# ============================================================================
+
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-semiprivate = false
+ignore-private = false
+ignore-property-decorators = false
+ignore-module = false
+ignore-nested-functions = false
+ignore-nested-classes = true
+ignore-setters = false
+fail-under = 80
+exclude = ["migrations", "tests", "docs"]
+verbose = 1
+quiet = false
+whitelist-regex = []
+color = true
+omit-covered-files = false
