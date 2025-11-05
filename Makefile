@@ -247,19 +247,42 @@ pre-commit-update:  ## Update pre-commit hooks
 # ============================================================================
 
 .PHONY: docker-build
-docker-build:  ## Build Docker image
-	@echo "🐳 Building Docker image..."
-	docker build -t discord-rag-bot:latest .
+docker-build:  ## Build Docker image with build script
+	@./scripts/build.sh
+
+.PHONY: docker-build-quick
+docker-build-quick:  ## Quick Docker build without cache
+	@echo "🐳 Building Docker image (no cache)..."
+	docker build --no-cache -t discord-rag-bot:latest .
 
 .PHONY: docker-run
 docker-run:  ## Run bot in Docker container
 	@echo "🐳 Running bot in Docker..."
-	docker run --env-file .env discord-rag-bot:latest
+	docker run --rm --env-file .env discord-rag-bot:latest
+
+.PHONY: docker-shell
+docker-shell:  ## Open shell in Docker container
+	@echo "🐳 Opening shell in container..."
+	docker run -it --rm --env-file .env --entrypoint /bin/bash discord-rag-bot:latest
+
+.PHONY: docker-scan
+docker-scan:  ## Scan Docker image for vulnerabilities
+	@echo "🔒 Scanning image for vulnerabilities..."
+	@if command -v trivy &> /dev/null; then \
+		trivy image discord-rag-bot:latest; \
+	else \
+		echo "⚠️  Trivy not installed. Install with: brew install trivy"; \
+	fi
 
 .PHONY: docker-compose-up
-docker-compose-up:  ## Start services with docker-compose
+docker-compose-up:  ## Start services with docker-compose (dev)
 	@echo "🐳 Starting services..."
 	docker-compose up -d
+
+.PHONY: docker-compose-prod
+docker-compose-prod:  ## Start services with docker-compose (production)
+	@echo "🐳 Starting production services..."
+	docker-compose -f docker-compose.prod.yml up -d
 
 .PHONY: docker-compose-down
 docker-compose-down:  ## Stop services with docker-compose
@@ -268,7 +291,42 @@ docker-compose-down:  ## Stop services with docker-compose
 
 .PHONY: docker-compose-logs
 docker-compose-logs:  ## Show docker-compose logs
-	docker-compose logs -f
+	docker-compose logs -f bot
+
+.PHONY: docker-compose-restart
+docker-compose-restart:  ## Restart docker-compose services
+	@echo "🔄 Restarting services..."
+	docker-compose restart
+
+.PHONY: docker-stats
+docker-stats:  ## Show Docker container resource usage
+	@docker stats --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
+
+# ============================================================================
+# Kubernetes Operations
+# ============================================================================
+
+.PHONY: k8s-deploy
+k8s-deploy:  ## Deploy to Kubernetes
+	@./scripts/deploy-k8s.sh
+
+.PHONY: k8s-status
+k8s-status:  ## Show Kubernetes deployment status
+	@kubectl get all -n discord-rag-bot
+
+.PHONY: k8s-logs
+k8s-logs:  ## Show Kubernetes logs
+	@kubectl logs -n discord-rag-bot -l app=discord-rag-bot -f
+
+.PHONY: k8s-shell
+k8s-shell:  ## Open shell in Kubernetes pod
+	@kubectl exec -it -n discord-rag-bot $$(kubectl get pods -n discord-rag-bot -l app=discord-rag-bot -o jsonpath='{.items[0].metadata.name}') -- /bin/bash
+
+.PHONY: k8s-delete
+k8s-delete:  ## Delete Kubernetes deployment
+	@echo "⚠️  This will delete the deployment!"
+	@kubectl delete -f k8s/deployment.yaml
+	@kubectl delete -f k8s/hpa.yaml
 
 # ============================================================================
 # Environment
