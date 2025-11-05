@@ -1,0 +1,273 @@
+# ============================================================================
+# Discord RAG Bot - Kubernetes Deployment
+# ============================================================================
+# Production-ready Kubernetes deployment with auto-scaling and monitoring
+# ============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: discord-rag-bot
+  labels:
+    name: discord-rag-bot
+    environment: production
+
+---
+# ============================================================================
+# ConfigMap - Application Configuration
+# ============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: discord-rag-bot-config
+  namespace: discord-rag-bot
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  OPENROUTER_MODEL: "minimax/minimax-m2:free"
+  EMBEDDING_MODEL: "text-embedding-3-small"
+  K_DOCUMENTS: "5"
+  CHUNK_SIZE: "1000"
+  CHUNK_OVERLAP: "200"
+
+---
+# ============================================================================
+# Secret - Sensitive Credentials
+# ============================================================================
+# IMPORTANT: Create this secret manually or via CI/CD
+# kubectl create secret generic discord-rag-bot-secrets \
+#   --from-literal=DISCORD_TOKEN=your_token \
+#   --from-literal=OPENAI_API_KEY=your_key \
+#   --from-literal=OPENROUTER_API_KEY=your_key \
+#   --from-literal=SUPABASE_URL=your_url \
+#   --from-literal=SUPABASE_API_KEY=your_key \
+#   -n discord-rag-bot
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: discord-rag-bot-secrets
+  namespace: discord-rag-bot
+type: Opaque
+# data:
+#   # Base64 encoded secrets (use kubectl create secret instead)
+#   DISCORD_TOKEN: ""
+#   OPENAI_API_KEY: ""
+#   OPENROUTER_API_KEY: ""
+#   SUPABASE_URL: ""
+#   SUPABASE_API_KEY: ""
+
+---
+# ============================================================================
+# PersistentVolumeClaim - Logs Storage
+# ============================================================================
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: discord-rag-bot-logs
+  namespace: discord-rag-bot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard  # Change based on your cluster
+
+---
+# ============================================================================
+# PersistentVolumeClaim - Data Storage
+# ============================================================================
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: discord-rag-bot-data
+  namespace: discord-rag-bot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+# ============================================================================
+# Deployment - Discord RAG Bot
+# ============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discord-rag-bot
+  namespace: discord-rag-bot
+  labels:
+    app: discord-rag-bot
+    version: v2.0.0
+spec:
+  replicas: 1  # Discord bot should have only 1 replica
+  selector:
+    matchLabels:
+      app: discord-rag-bot
+  strategy:
+    type: Recreate  # Only one instance should run
+  template:
+    metadata:
+      labels:
+        app: discord-rag-bot
+        version: v2.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Security Context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+
+      # Service Account
+      serviceAccountName: discord-rag-bot
+
+      # Init Container - Check dependencies
+      initContainers:
+        - name: check-supabase
+          image: curlimages/curl:latest
+          command:
+            - sh
+            - -c
+            - |
+              echo "Checking Supabase connectivity..."
+              curl -f --connect-timeout 10 --max-time 30 "${SUPABASE_URL}/rest/v1/" -H "apikey: ${SUPABASE_API_KEY}" || exit 1
+              echo "Supabase is reachable"
+          envFrom:
+            - secretRef:
+                name: discord-rag-bot-secrets
+
+      # Main Container
+      containers:
+        - name: bot
+          image: discord-rag-bot:2.0.0
+          imagePullPolicy: Always
+
+          # Environment Variables
+          envFrom:
+            - configMapRef:
+                name: discord-rag-bot-config
+            - secretRef:
+                name: discord-rag-bot-secrets
+
+          # Resource Limits
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+
+          # Volumes
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+            - name: data
+              mountPath: /app/data
+            - name: cache
+              mountPath: /home/botuser/.cache
+
+          # Liveness Probe
+          livenessProbe:
+            exec:
+              command:
+                - /healthcheck.sh
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          # Readiness Probe
+          readinessProbe:
+            exec:
+              command:
+                - /healthcheck.sh
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # Security Context
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop:
+                - ALL
+
+      # Volumes
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: discord-rag-bot-logs
+        - name: data
+          persistentVolumeClaim:
+            claimName: discord-rag-bot-data
+        - name: cache
+          emptyDir:
+            sizeLimit: 500Mi
+
+      # Node Affinity (optional - for specific node selection)
+      # affinity:
+      #   nodeAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #       nodeSelectorTerms:
+      #         - matchExpressions:
+      #             - key: workload-type
+      #               operator: In
+      #               values:
+      #                 - bot
+
+      # Tolerations (optional)
+      # tolerations:
+      #   - key: "workload-type"
+      #     operator: "Equal"
+      #     value: "bot"
+      #     effect: "NoSchedule"
+
+---
+# ============================================================================
+# ServiceAccount - For RBAC
+# ============================================================================
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: discord-rag-bot
+  namespace: discord-rag-bot
+
+---
+# ============================================================================
+# Service - For potential metrics endpoint
+# ============================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: discord-rag-bot
+  namespace: discord-rag-bot
+  labels:
+    app: discord-rag-bot
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: metrics
+  selector:
+    app: discord-rag-bot

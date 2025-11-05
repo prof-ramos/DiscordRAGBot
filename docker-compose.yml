@@ -1,0 +1,89 @@
+# ============================================================================
+# Discord RAG Bot - Docker Compose (Development)
+# ============================================================================
+# Development environment with hot-reload and debugging support
+# ============================================================================
+
+version: '3.9'
+
+services:
+  # ==========================================================================
+  # Discord RAG Bot
+  # ==========================================================================
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder  # Use builder stage for development
+      args:
+        - BUILD_DATE=${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
+        - VCS_REF=${VCS_REF:-$(git rev-parse --short HEAD)}
+        - VERSION=2.0.0-dev
+
+    container_name: discord-rag-bot-dev
+    hostname: rag-bot
+
+    # Environment variables (override with .env file)
+    env_file:
+      - .env
+
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - PYTHONUNBUFFERED=1
+
+    # Volumes for development
+    volumes:
+      - ./src:/app/src:ro              # Source code (read-only)
+      - ./data:/app/data                # Data directory
+      - ./logs:/app/logs                # Logs directory
+      - bot-cache:/home/botuser/.cache  # Cache directory
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Network
+    networks:
+      - bot-network
+
+    # Logging
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=discord-rag-bot"
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  bot-network:
+    driver: bridge
+    name: discord-rag-bot-network
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+volumes:
+  bot-cache:
+    driver: local
+    name: discord-rag-bot-cache

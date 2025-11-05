@@ -1,0 +1,132 @@
+# ============================================================================
+# Discord RAG Bot - Docker Compose (Production)
+# ============================================================================
+# Production environment with optimizations and monitoring
+# ============================================================================
+
+version: '3.9'
+
+services:
+  # ==========================================================================
+  # Discord RAG Bot
+  # ==========================================================================
+  bot:
+    image: discord-rag-bot:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - BUILD_DATE=${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
+        - VCS_REF=${VCS_REF:-$(git rev-parse --short HEAD)}
+        - VERSION=2.0.0
+
+    container_name: discord-rag-bot-prod
+    hostname: rag-bot-prod
+
+    # Environment variables from secrets
+    env_file:
+      - .env.production
+
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+
+    # Volumes (minimal for production)
+    volumes:
+      - ./data:/app/data:ro              # Data directory (read-only)
+      - bot-logs:/app/logs                # Logs (persistent volume)
+      - bot-cache:/home/botuser/.cache    # Cache (persistent volume)
+
+    # Restart policy
+    restart: always
+
+    # Resource limits (production)
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+    # Network
+    networks:
+      - bot-network
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+    # Read-only root filesystem (with exceptions)
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+
+    # Logging (structured for production)
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+        labels: "service=discord-rag-bot,environment=production"
+        tag: "{{.Name}}/{{.ID}}"
+
+  # ==========================================================================
+  # Prometheus Exporter (Optional)
+  # ==========================================================================
+  # prometheus-exporter:
+  #   image: prom/node-exporter:latest
+  #   container_name: node-exporter
+  #   restart: unless-stopped
+  #   volumes:
+  #     - /proc:/host/proc:ro
+  #     - /sys:/host/sys:ro
+  #     - /:/rootfs:ro
+  #   command:
+  #     - '--path.procfs=/host/proc'
+  #     - '--path.sysfs=/host/sys'
+  #     - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+  #   networks:
+  #     - bot-network
+  #   ports:
+  #     - "9100:9100"
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  bot-network:
+    driver: bridge
+    name: discord-rag-bot-prod-network
+    driver_opts:
+      com.docker.network.bridge.name: br-discord-rag
+
+# ==============================================================================
+# Volumes (Named volumes for production)
+# ==============================================================================
+volumes:
+  bot-logs:
+    driver: local
+    name: discord-rag-bot-logs
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/discord-rag-bot/logs
+
+  bot-cache:
+    driver: local
+    name: discord-rag-bot-cache

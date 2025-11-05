@@ -1,0 +1,120 @@
+# ============================================================================
+# Docker Ignore File
+# ============================================================================
+# Files and directories to exclude from Docker build context
+# ============================================================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+.github
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+*.cover
+.coverage.*
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Environment Files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Documentation
+docs/
+*.md
+!README.md
+LICENSE
+
+# Tests
+tests/
+test_*.py
+*_test.py
+conftest.py
+
+# CI/CD (built separately)
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Docker
+.dockerignore
+Dockerfile*
+docker-compose*.yml
+.docker/
+
+# Development
+Makefile
+.pre-commit-config.yaml
+pyproject.toml
+setup.py
+setup.cfg
+requirements-dev.txt
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# Data (will be mounted as volumes)
+data/*
+!data/.gitkeep
+
+# Migrations (may be run separately)
+migrations/*.sql
+migrations/*.md
+
+# Assets
+attached_assets/
+
+# Local state
+.local/
+server_config.json
+
+# Coverage and profiling
+.coverage
+coverage.xml
+*.prof
+*.svg
+
+# Build artifacts
+*.whl
+*.tar.gz

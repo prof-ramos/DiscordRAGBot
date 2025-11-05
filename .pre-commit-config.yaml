@@ -1,0 +1,193 @@
+# ============================================================================
+# Pre-commit Hooks Configuration
+# ============================================================================
+# Automatic code quality checks before every commit.
+#
+# Setup:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run manually:
+#   pre-commit run --all-files
+#
+# Update hooks:
+#   pre-commit autoupdate
+# ============================================================================
+
+default_language_version:
+  python: python3.11
+
+repos:
+  # =========================================================================
+  # General Pre-commit Hooks
+  # =========================================================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # File formatting
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--safe]
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: check-docstring-first
+      - id: debug-statements
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: name-tests-test
+        args: [--pytest-test-first]
+      - id: fix-byte-order-marker
+      - id: check-ast
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+
+  # =========================================================================
+  # Python Code Formatting
+  # =========================================================================
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        language_version: python3.11
+        args: [--config=pyproject.toml]
+
+  # =========================================================================
+  # Import Sorting
+  # =========================================================================
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        name: isort
+        args: [--profile=black, --line-length=88]
+
+  # =========================================================================
+  # Linting with Ruff (Fast Python Linter)
+  # =========================================================================
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+
+  # =========================================================================
+  # Type Checking with MyPy
+  # =========================================================================
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pydantic>=2.5.0
+          - types-requests
+        args: [--config-file=pyproject.toml]
+        exclude: ^(tests/|migrations/)
+
+  # =========================================================================
+  # Security Checks
+  # =========================================================================
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.6
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml, -r, src/]
+        additional_dependencies: [bandit[toml]]
+
+  # =========================================================================
+  # Dependency Security
+  # =========================================================================
+  - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
+    rev: v1.3.3
+    hooks:
+      - id: python-safety-dependencies-check
+        args: [--short-report]
+        files: requirements.*\.txt$
+
+  # =========================================================================
+  # Secrets Detection
+  # =========================================================================
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: [--baseline, .secrets.baseline]
+        exclude: .*\.lock$
+
+  # =========================================================================
+  # Markdown Linting
+  # =========================================================================
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.38.0
+    hooks:
+      - id: markdownlint
+        args: [--fix]
+        exclude: ^(migrations/|docs/api/)
+
+  # =========================================================================
+  # YAML Formatting
+  # =========================================================================
+  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+    rev: v2.12.0
+    hooks:
+      - id: pretty-format-yaml
+        args: [--autofix, --indent, '2']
+
+  # =========================================================================
+  # Shell Script Checks
+  # =========================================================================
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+
+  # =========================================================================
+  # Docstring Coverage
+  # =========================================================================
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.5.0
+    hooks:
+      - id: interrogate
+        args: [-vv, --config=pyproject.toml]
+        pass_filenames: false
+
+  # =========================================================================
+  # Jupyter Notebook Cleaning
+  # =========================================================================
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.6.1
+    hooks:
+      - id: nbstripout
+        args: [--extra-keys=metadata.kernel_spec metadata.language_info]
+
+  # =========================================================================
+  # Commit Message Linting
+  # =========================================================================
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [--strict]
+
+# ============================================================================
+# CI Configuration
+# ============================================================================
+ci:
+  autofix_commit_msg: |
+    chore(pre-commit): auto fixes from pre-commit hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: 'chore(deps): update pre-commit hooks'
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false

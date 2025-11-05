@@ -1,0 +1,36 @@
+# ============================================================================
+# Production Dependencies
+# ============================================================================
+# These are the core dependencies required to run the bot in production.
+# Install with: pip install -r requirements-prod.txt
+# ============================================================================
+
+# Core Framework
+discord.py>=2.3.0,<3.0.0
+
+# LangChain Stack
+langchain>=0.1.0,<0.2.0
+langchain-community>=0.0.20,<0.1.0
+langchain-openai>=0.0.5,<0.1.0
+langchain-text-splitters>=0.0.1,<0.1.0
+langchain-core>=0.1.0,<0.2.0
+
+# AI/ML
+openai>=1.0.0,<2.0.0
+tiktoken>=0.5.0,<1.0.0
+
+# Vector Store & Database
+supabase>=2.0.0,<3.0.0
+
+# PDF Processing
+pypdf>=3.17.0,<4.0.0
+
+# Data Validation & Settings
+pydantic>=2.5.0,<3.0.0
+pydantic-settings>=2.1.0,<3.0.0
+
+# Configuration
+python-dotenv>=1.0.0,<2.0.0
+
+# HTTP Client
+httpx>=0.25.0,<0.26.0
