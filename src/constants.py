@@ -108,11 +108,19 @@ SUPPORTED_DOCUMENT_TYPES: Final[set[str]] = {
     ".txt",
     ".md",
     ".rst",
+    ".doc",
+    ".docx",
+    ".csv",
+    ".xlsx",
+    ".xls",
 }
 
 PDF_FILE_EXTENSION: Final[str] = ".pdf"
 TEXT_FILE_EXTENSION: Final[str] = ".txt"
 MARKDOWN_FILE_EXTENSION: Final[str] = ".md"
+DOCX_FILE_EXTENSION: Final[str] = ".docx"
+CSV_FILE_EXTENSION: Final[str] = ".csv"
+EXCEL_FILE_EXTENSIONS: Final[tuple[str, ...]] = (".xlsx", ".xls")
 
 # ============================================================================
 # Hash Algorithm
@@ -125,7 +133,7 @@ HASH_CHUNK_SIZE: Final[int] = 4096  # Bytes to read at once when hashing
 # Error Messages
 # ============================================================================
 
-ERROR_NO_DOCUMENTS: Final[str] = "No PDF files found in the data directory"
+ERROR_NO_DOCUMENTS: Final[str] = "No supported documents found in the data directory"
 ERROR_VECTORSTORE_NOT_LOADED: Final[str] = "Vector store must be loaded before use"
 ERROR_INVALID_FILTER_LEVEL: Final[str] = "Invalid filter level"
 ERROR_RATE_LIMIT_EXCEEDED: Final[str] = "Rate limit exceeded. Please try again later"
@@ -214,6 +222,8 @@ class SourceType(str, Enum):
     MARKDOWN = "md"
     HTML = "html"
     DOCX = "docx"
+    CSV = "csv"
+    EXCEL = "excel"
     UNKNOWN = "unknown"
 
     def __str__(self) -> str:
@@ -248,6 +258,9 @@ class SourceType(str, Enum):
             "htm": cls.HTML,
             "docx": cls.DOCX,
             "doc": cls.DOCX,
+            "csv": cls.CSV,
+            "xlsx": cls.EXCEL,
+            "xls": cls.EXCEL,
         }
 
         return mapping.get(ext, cls.UNKNOWN)

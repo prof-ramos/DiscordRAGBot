@@ -17,9 +17,15 @@ supabase
 # Discord
 discord.py
 
-# PDF Processing
+# Document Processing
 pypdf
 PyPDF2
+python-docx  # For DOCX and DOC files
+openpyxl     # For XLSX files
+xlrd         # For XLS files
+pandas       # For CSV and Excel data processing
+unstructured # Advanced document loading
+python-magic-bin  # File type detection (Windows compatible)
 
 # Data Validation & Settings
 pydantic>=2.0.0

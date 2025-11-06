@@ -1,0 +1,11 @@
+Este é um documento de teste para o formato TXT.
+
+O bot Discord RAG agora suporta múltiplos formatos de documentos:
+- PDF
+- DOCX e DOC
+- TXT
+- Markdown (MD)
+- CSV
+- Excel (XLSX e XLS)
+
+Isso permite maior flexibilidade no processamento de documentos.
