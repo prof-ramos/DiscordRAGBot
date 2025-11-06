@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Document Loading and Indexing Script.
+"""Script de Carregamento e Indexação de Documentos.
 
-This script loads PDF documents, splits them into chunks,
-generates embeddings, and stores them in Supabase for RAG.
+Este script carrega documentos em múltiplos formatos (PDF, DOCX, TXT, MD, CSV, Excel),
+divide-os em chunks, gera embeddings e os armazena no Supabase para RAG.
 """
 
 import sys
@@ -10,7 +10,13 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
-from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader
+from langchain_community.document_loaders import (
+    DirectoryLoader,
+    PyPDFLoader,
+    TextLoader,
+    UnstructuredMarkdownLoader,
+    UnstructuredWordDocumentLoader,
+)
 from langchain_community.vectorstores import SupabaseVectorStore
 from langchain_core.documents import Document as LangChainDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -19,28 +25,30 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.config import get_settings
+from src.constants import SUPPORTED_DOCUMENT_TYPES
 from src.exceptions import DocumentLoadError, VectorStoreError
 from src.logging_config import get_logger
 from src.services import SupabaseService
+from src.utils.document_loaders import CSVLoader, ExcelLoader
 
 # Load environment variables
 load_dotenv()
 
 
 class DocumentIndexer:
-    """Handles document loading, splitting, and indexing.
+    """Gerencia o carregamento, divisão e indexação de documentos.
 
-    This class provides a clean interface for the document
-    indexing pipeline with proper error handling.
+    Esta classe fornece uma interface limpa para o pipeline de
+    indexação de documentos com tratamento adequado de erros.
 
     Attributes:
-        settings: Application settings
-        logger: Logger instance
-        supabase_service: Supabase service for storage
+        settings: Configurações da aplicação
+        logger: Instância do logger
+        supabase_service: Serviço Supabase para armazenamento
     """
 
     def __init__(self) -> None:
-        """Initialize the document indexer."""
+        """Inicializa o indexador de documentos."""
         self.settings = get_settings()
         self.logger = get_logger(self.settings)
         self.supabase_service = SupabaseService(
@@ -48,69 +56,152 @@ class DocumentIndexer:
             logger=self.logger,
         )
 
-    def load_documents(self) -> list[LangChainDocument]:
-        """Load all PDF documents from data directory.
+    def _get_loader_for_file(self, file_path: Path) -> object:
+        """Obtém o carregador apropriado para um arquivo baseado em sua extensão.
+
+        Args:
+            file_path: Caminho para o arquivo
 
         Returns:
-            List of loaded documents
+            Instância apropriada do carregador para o tipo de arquivo
 
         Raises:
-            DocumentLoadError: If no documents found or loading fails
+            ValueError: Se o tipo de arquivo não for suportado
+        """
+        extension = file_path.suffix.lower()
+
+        loader_map = {
+            ".pdf": lambda: PyPDFLoader(str(file_path)),
+            ".txt": lambda: TextLoader(str(file_path), encoding="utf-8"),
+            ".md": lambda: UnstructuredMarkdownLoader(str(file_path)),
+            ".rst": lambda: TextLoader(str(file_path), encoding="utf-8"),
+            ".doc": lambda: UnstructuredWordDocumentLoader(str(file_path)),
+            ".docx": lambda: UnstructuredWordDocumentLoader(str(file_path)),
+            ".csv": lambda: CSVLoader(file_path),
+            ".xlsx": lambda: ExcelLoader(file_path),
+            ".xls": lambda: ExcelLoader(file_path),
+        }
+
+        if extension not in loader_map:
+            raise ValueError(f"Tipo de arquivo não suportado: {extension}")
+
+        return loader_map[extension]()
+
+    def load_documents(self) -> list[LangChainDocument]:
+        """Carrega todos os documentos suportados do diretório de dados.
+
+        Suporta: PDF, DOCX, DOC, TXT, Markdown, CSV, Excel (XLSX, XLS)
+
+        Returns:
+            Lista de documentos carregados
+
+        Raises:
+            DocumentLoadError: Se nenhum documento for encontrado ou o carregamento falhar
         """
         self.logger.info(
-            "Loading documents",
+            "Carregando documentos",
             action="LOADING",
             directory=str(self.settings.data_dir),
         )
 
         if not self.settings.data_dir.exists():
             raise DocumentLoadError(
-                f"Data directory '{self.settings.data_dir}' not found. "
-                f"Please create it and add PDF files."
+                f"Diretório de dados '{self.settings.data_dir}' não encontrado. "
+                f"Por favor, crie-o e adicione arquivos de documentos."
             )
 
-        # Find PDF files
-        pdf_files = list(self.settings.data_dir.glob("*.pdf"))
+        # Encontra todos os arquivos suportados
+        supported_files = []
+        file_types_found = {}
 
-        if not pdf_files:
+        for ext in SUPPORTED_DOCUMENT_TYPES:
+            files = list(self.settings.data_dir.glob(f"*{ext}"))
+            if files:
+                supported_files.extend(files)
+                file_types_found[ext] = len(files)
+
+        if not supported_files:
+            formats = ", ".join(SUPPORTED_DOCUMENT_TYPES)
             raise DocumentLoadError(
-                f"No PDF files found in '{self.settings.data_dir}'. "
-                f"Please add .pdf files to this directory."
+                f"Nenhum documento suportado encontrado em '{self.settings.data_dir}'. "
+                f"Formatos suportados: {formats}"
             )
 
         self.logger.info(
-            "PDF files found",
+            "Arquivos suportados encontrados",
             action="SUCCESS",
-            count=len(pdf_files),
+            total=len(supported_files),
+            by_type=file_types_found,
         )
 
-        # Load documents
-        try:
-            loader = DirectoryLoader(
-                str(self.settings.data_dir),
-                glob="**/*.pdf",
-                loader_cls=PyPDFLoader,
-                show_progress=True,
-            )
+        # Carrega documentos
+        all_documents = []
+        load_errors = []
 
-            documents = loader.load()
+        try:
+            for file_path in supported_files:
+                try:
+                    self.logger.info(
+                        f"Carregando arquivo: {file_path.name}",
+                        action="LOADING",
+                        file_type=file_path.suffix,
+                    )
+
+                    loader = self._get_loader_for_file(file_path)
+                    documents = loader.load()
+                    all_documents.extend(documents)
+
+                    self.logger.info(
+                        f"Arquivo carregado com sucesso: {file_path.name}",
+                        action="SUCCESS",
+                        chunks=len(documents),
+                    )
+
+                except Exception as e:
+                    error_msg = f"Falha ao carregar {file_path.name}: {str(e)}"
+                    self.logger.warning(
+                        error_msg,
+                        action="WARNING",
+                        file=str(file_path),
+                        error=str(e),
+                    )
+                    load_errors.append(error_msg)
+
+            if not all_documents:
+                error_summary = "\n".join(load_errors)
+                raise DocumentLoadError(
+                    f"Falha ao carregar qualquer documento. Erros:\n{error_summary}"
+                )
+
+            if load_errors:
+                self.logger.warning(
+                    "Alguns arquivos falharam ao carregar",
+                    action="WARNING",
+                    failed_count=len(load_errors),
+                    success_count=len(all_documents),
+                )
 
             self.logger.info(
-                "Documents loaded",
+                "Todos os documentos carregados com sucesso",
                 action="SUCCESS",
-                pages=len(documents),
+                total_chunks=len(all_documents),
+                files_processed=len(supported_files),
+                files_failed=len(load_errors),
             )
 
-            return documents
+            return all_documents
+
+        except DocumentLoadError:
+            raise
 
         except Exception as e:
             self.logger.error(
-                "Failed to load documents",
+                "Falha ao carregar documentos",
                 action="ERROR",
                 exc_info=True,
             )
             raise DocumentLoadError(
-                "Failed to load PDF documents",
+                "Falha ao carregar documentos",
                 original_error=e,
             ) from e
 
@@ -118,16 +209,16 @@ class DocumentIndexer:
         self,
         documents: list[LangChainDocument],
     ) -> list[LangChainDocument]:
-        """Split documents into smaller chunks.
+        """Divide documentos em chunks menores.
 
         Args:
-            documents: Documents to split
+            documents: Documentos para dividir
 
         Returns:
-            List of document chunks
+            Lista de chunks de documentos
         """
         self.logger.info(
-            "Splitting documents into chunks",
+            "Dividindo documentos em chunks",
             action="LOADING",
             chunk_size=self.settings.chunk_size,
             chunk_overlap=self.settings.chunk_overlap,
@@ -143,7 +234,7 @@ class DocumentIndexer:
         chunks = text_splitter.split_documents(documents)
 
         self.logger.info(
-            "Documents split into chunks",
+            "Documentos divididos em chunks",
             action="SUCCESS",
             chunks=len(chunks),
         )
@@ -154,38 +245,38 @@ class DocumentIndexer:
         self,
         chunks: list[LangChainDocument],
     ) -> SupabaseVectorStore:
-        """Create vector store and index documents.
+        """Cria vector store e indexa documentos.
 
         Args:
-            chunks: Document chunks to index
+            chunks: Chunks de documentos para indexar
 
         Returns:
-            Configured vector store
+            Vector store configurado
 
         Raises:
-            VectorStoreError: If indexing fails
+            VectorStoreError: Se a indexação falhar
         """
         self.logger.info(
-            "Creating vector store in Supabase",
+            "Criando vector store no Supabase",
             action="LOADING",
             table=self.settings.supabase_table_name,
         )
         self.logger.info(
-            "This may take several minutes...",
+            "Isso pode levar alguns minutos...",
             action="LOADING",
         )
 
         try:
-            # Import here to avoid circular dependency
+            # Import aqui para evitar dependência circular
             from langchain_openai import OpenAIEmbeddings
 
-            # Create embeddings
+            # Cria embeddings
             embeddings = OpenAIEmbeddings(
                 model=self.settings.embedding_model,
                 openai_api_key=self.settings.openai_api_key,
             )
 
-            # Create vector store
+            # Cria vector store
             vectorstore = SupabaseVectorStore.from_documents(
                 documents=chunks,
                 embedding=embeddings,
@@ -195,7 +286,7 @@ class DocumentIndexer:
             )
 
             self.logger.info(
-                "Vector store created successfully",
+                "Vector store criado com sucesso",
                 action="SUCCESS",
                 vectors=len(chunks),
             )
@@ -204,51 +295,51 @@ class DocumentIndexer:
 
         except Exception as e:
             self.logger.error(
-                "Failed to create vector store",
+                "Falha ao criar vector store",
                 action="ERROR",
                 exc_info=True,
             )
             raise VectorStoreError(
-                "Failed to index documents in Supabase",
+                "Falha ao indexar documentos no Supabase",
                 operation="create_vectorstore",
                 original_error=e,
             ) from e
 
     async def run(self) -> None:
-        """Run the complete indexing pipeline."""
+        """Executa o pipeline completo de indexação."""
         print("\n" + "=" * 60)
-        print("🚀 DOCUMENT INDEXING - RAG")
+        print("🚀 INDEXAÇÃO DE DOCUMENTOS - RAG")
         print("=" * 60 + "\n")
 
         try:
-            # Load documents
+            # Carrega documentos
             documents = self.load_documents()
 
-            # Split into chunks
+            # Divide em chunks
             chunks = self.split_documents(documents)
 
-            # Index documents
+            # Indexa documentos
             await self.index_documents(chunks)
 
-            # Success summary
+            # Resumo de sucesso
             print("\n" + "=" * 60)
-            print("✅ INDEXING COMPLETE!")
+            print("✅ INDEXAÇÃO COMPLETA!")
             print("=" * 60)
-            print(f"📊 Total vectors: {len(chunks)}")
-            print(f"📁 Location: Supabase (table '{self.settings.supabase_table_name}')")
-            print("\n💡 Next step: Run 'python bot.py' to start the bot")
+            print(f"📊 Total de vetores: {len(chunks)}")
+            print(f"📁 Localização: Supabase (tabela '{self.settings.supabase_table_name}')")
+            print("\n💡 Próximo passo: Execute 'python bot.py' para iniciar o bot")
             print("=" * 60 + "\n")
 
         except DocumentLoadError as e:
-            print(f"\n❌ Document Loading Error: {e}\n")
+            print(f"\n❌ Erro ao Carregar Documentos: {e}\n")
             sys.exit(1)
 
         except VectorStoreError as e:
-            print(f"\n❌ Vector Store Error: {e}\n")
+            print(f"\n❌ Erro no Vector Store: {e}\n")
             sys.exit(1)
 
         except Exception as e:
-            print(f"\n❌ Unexpected Error: {e}\n")
+            print(f"\n❌ Erro Inesperado: {e}\n")
             import traceback
 
             traceback.print_exc()
@@ -256,7 +347,7 @@ class DocumentIndexer:
 
 
 async def main() -> None:
-    """Main entry point for document indexing."""
+    """Ponto de entrada principal para indexação de documentos."""
     indexer = DocumentIndexer()
     await indexer.run()
 
