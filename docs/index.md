@@ -6,9 +6,9 @@ Bem-vindo à documentação técnica do Bot Discord RAG PT-BR!
 
 ### Sumário do Projeto
 
-**Nome**: Bot Discord RAG PT-BR  
-**Propósito**: Bot Discord com RAG (Retrieval-Augmented Generation) que responde perguntas baseadas em documentos PDF, otimizado para português brasileiro.  
-**Linguagem Principal**: Python 3.11  
+**Nome**: Bot Discord RAG PT-BR
+**Propósito**: Bot Discord com RAG (Retrieval-Augmented Generation) que responde perguntas baseadas em documentos em múltiplos formatos (PDF, DOCX, TXT, CSV, Excel, Markdown), otimizado para português brasileiro.
+**Linguagem Principal**: Python 3.11
 **Arquitetura**: Sistema RAG (Retrieval-Augmented Generation) com busca vetorial e LLM
 
 ### O que é RAG?
@@ -88,6 +88,7 @@ Consulte as seções de [Instalação](installation.md) e [Uso](usage.md) para d
 - **[Arquitetura](architecture.md)** - Componentes e design do sistema
 - **[Instalação](installation.md)** - Setup completo passo a passo
 - **[Uso](usage.md)** - Guia de uso e comandos
+- **[Formatos Suportados](formatos_suportados.md)** - Documentos suportados e como usá-los
 - **[Logs](logs.md)** - Sistema de logging e análise
 - **[Referência API](api.md)** - Funções e classes detalhadas
 - **[Troubleshooting](troubleshooting.md)** - Solução de problemas comuns
