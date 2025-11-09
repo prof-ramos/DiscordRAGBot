@@ -176,8 +176,7 @@ Envie qualquer mensagem direta ao bot
 ├── requirements.txt       # Dependências Python
 ├── .env.example           # Template de configuração
 ├── .gitignore             # Arquivos ignorados pelo git
-├── README.md              # Este arquivo
-└── replit.md              # Documentação técnica do projeto
+└── README.md              # Este arquivo
 ```
 
 ## 📊 Sistema de Logs
