@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord RAG Bot - Terminal Interface</title>
+    <link rel="stylesheet" href="css/terminal.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
+</head>
+<body>
+    <main class="terminal">
+        <!-- Header Section -->
+        <header class="terminal-header">
+            <div class="ascii-title">
+                <pre class="ascii-art">
+╔═══════════════════════════════════════════════════════════════╗
+║  ____  _                       _   ____    _    ____          ║
+║ |  _ \(_)___  ___ ___  _ __ __| | |  _ \  / \  / ___|         ║
+║ | | | | / __|/ __/ _ \| '__/ _` | | |_) |/ _ \| |  _          ║
+║ | |_| | \__ \ (_| (_) | | | (_| | |  _ </ ___ \ |_| |         ║
+║ |____/|_|___/\___\___/|_|  \__,_| |_| \_\_/   \_\____|        ║
+║                                                                ║
+║           Bot de Perguntas e Respostas com IA                 ║
+╚═══════════════════════════════════════════════════════════════╝
+                </pre>
+            </div>
+            <div class="terminal-subtitle">
+                <span class="status-dot" id="bot-status"></span>
+                <span id="status-text">Verificando status do bot...</span>
+            </div>
+        </header>
+
+        <!-- Main Query Section -->
+        <section class="terminal-section">
+            <div class="terminal-command">
+                <div class="header-content">
+                    <h2 class="search-title">
+                        <span class="terminal-dot"></span>
+                        <strong>query</strong>
+                        <span class="title-params">(--question &lt;texto&gt;)</span>
+                    </h2>
+                    <p class="search-subtitle">⎿ Faça uma pergunta e receba resposta baseada nos documentos indexados</p>
+                </div>
+
+                <div class="terminal-search-container">
+                    <div class="terminal-search-wrapper">
+                        <span class="terminal-prompt">&gt;</span>
+                        <input
+                            type="text"
+                            class="terminal-search-input"
+                            id="query-input"
+                            placeholder="Digite sua pergunta aqui..."
+                            autocomplete="off"
+                        >
+                        <button class="terminal-btn send-btn" id="send-query" title="Enviar (Enter)">
+                            <span class="btn-icon">▶</span>
+                        </button>
+                    </div>
+
+                    <!-- Filter Level -->
+                    <div class="filter-group">
+                        <span class="filter-group-label">filter_level:</span>
+                        <div class="filter-chips">
+                            <button class="filter-chip" data-filter="conservador">
+                                <span class="chip-icon">🔒</span>Conservador
+                            </button>
+                            <button class="filter-chip active" data-filter="moderado">
+                                <span class="chip-icon">⚖️</span>Moderado
+                            </button>
+                            <button class="filter-chip" data-filter="liberal">
+                                <span class="chip-icon">🔓</span>Liberal
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Response Output -->
+            <div class="terminal-output" id="response-section" style="display: none;">
+                <div class="output-header">
+                    <span class="output-prompt">$</span>
+                    <span class="output-command">response</span>
+                    <span class="output-time" id="response-time"></span>
+                </div>
+                <div class="output-content" id="response-content"></div>
+                <div class="output-sources" id="response-sources"></div>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div class="terminal-loading" id="loading-indicator" style="display: none;">
+                <span class="loading-prompt">&gt;</span>
+                <span class="loading-text">Processando consulta</span>
+                <span class="loading-dots">
+                    <span>.</span><span>.</span><span>.</span>
+                </span>
+            </div>
+        </section>
+
+        <!-- Stats Dashboard -->
+        <section class="terminal-section">
+            <div class="terminal-command">
+                <div class="header-content">
+                    <h2 class="search-title">
+                        <span class="terminal-dot"></span>
+                        <strong>status</strong>
+                        <span class="title-params">(--verbose)</span>
+                    </h2>
+                    <p class="search-subtitle">⎿ Estatísticas e status do sistema</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-icon">🤖</span>
+                            <span class="stat-label">Bot Status</span>
+                        </div>
+                        <div class="stat-value" id="bot-status-value">
+                            <span class="status-indicator loading"></span>
+                            Verificando...
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-icon">📊</span>
+                            <span class="stat-label">RAG Status</span>
+                        </div>
+                        <div class="stat-value" id="rag-status-value">
+                            <span class="status-indicator loading"></span>
+                            Verificando...
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-icon">🔧</span>
+                            <span class="stat-label">Modelo LLM</span>
+                        </div>
+                        <div class="stat-value" id="llm-model-value">
+                            <code class="stat-code">carregando...</code>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-icon">💾</span>
+                            <span class="stat-label">Cache</span>
+                        </div>
+                        <div class="stat-value" id="cache-status-value">
+                            <code class="stat-code">carregando...</code>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-icon">📁</span>
+                            <span class="stat-label">Documentos</span>
+                        </div>
+                        <div class="stat-value" id="docs-count-value">
+                            <code class="stat-code">carregando...</code>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-icon">⚡</span>
+                            <span class="stat-label">Consultas</span>
+                        </div>
+                        <div class="stat-value" id="queries-count-value">
+                            <code class="stat-code">0</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Command Examples -->
+        <section class="terminal-section">
+            <div class="terminal-command">
+                <div class="header-content">
+                    <h2 class="search-title">
+                        <span class="terminal-dot"></span>
+                        <strong>examples</strong>
+                        <span class="title-params">()</span>
+                    </h2>
+                    <p class="search-subtitle">⎿ Exemplos de perguntas que você pode fazer</p>
+                </div>
+
+                <div class="examples-list">
+                    <div class="example-item" data-example="O que é RAG?">
+                        <span class="example-prompt">$</span>
+                        <code class="example-text">O que é RAG?</code>
+                        <button class="example-try" title="Tentar este exemplo">▶</button>
+                    </div>
+                    <div class="example-item" data-example="Como funciona o sistema de embeddings?">
+                        <span class="example-prompt">$</span>
+                        <code class="example-text">Como funciona o sistema de embeddings?</code>
+                        <button class="example-try" title="Tentar este exemplo">▶</button>
+                    </div>
+                    <div class="example-item" data-example="Qual a diferença entre os níveis de filtro?">
+                        <span class="example-prompt">$</span>
+                        <code class="example-text">Qual a diferença entre os níveis de filtro?</code>
+                        <button class="example-try" title="Tentar este exemplo">▶</button>
+                    </div>
+                    <div class="example-item" data-example="Como adicionar novos documentos?">
+                        <span class="example-prompt">$</span>
+                        <code class="example-text">Como adicionar novos documentos?</code>
+                        <button class="example-try" title="Tentar este exemplo">▶</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="terminal-footer">
+            <div class="footer-content">
+                <div class="footer-item">
+                    <span class="footer-label">version:</span>
+                    <code>2.0.0</code>
+                </div>
+                <div class="footer-item">
+                    <span class="footer-label">uptime:</span>
+                    <code id="uptime">00:00:00</code>
+                </div>
+                <div class="footer-item">
+                    <span class="footer-label">endpoint:</span>
+                    <code id="api-endpoint">http://localhost:8000</code>
+                </div>
+            </div>
+            <div class="footer-credits">
+                <span>Built with ❤️ using Discord.py + LangChain + Supabase</span>
+            </div>
+        </footer>
+    </main>
+
+    <script src="js/terminal.js"></script>
+</body>
+</html>
