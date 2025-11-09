@@ -17,10 +17,60 @@ Bot Discord com RAG (Retrieval-Augmented Generation) otimizado para português, 
 - **Recursos:**
   - Respostas com citação de fontes
   - Divisão automática de mensagens longas
-  - Suporte a PDFs
+  - Suporte a múltiplos formatos (PDF, DOCX, CSV, XLSX, TXT, MD)
   - Configuração de níveis de filtro de conteúdo (conservador, moderado, liberal)
 
-## 🚀 Configuração
+- **🌐 Interface Web Terminal:**
+  - Interface CLI-style moderna e responsiva
+  - Consultas via navegador web
+  - Dashboard de status e estatísticas
+  - API REST para integração
+  - Deploy facilitado com Docker + Traefik
+
+## 🌐 Interface Web
+
+O bot inclui uma **interface web profissional com estética de terminal CLI**!
+
+### Acessar Interface
+
+```bash
+# Iniciar servidor API
+python api_server.py
+```
+
+Acesse: `http://localhost:8000`
+
+### Funcionalidades da Interface
+
+- 🎨 **Design Terminal CLI** moderno e responsivo
+- 💬 **Fazer perguntas** diretamente pelo navegador
+- 📊 **Dashboard de status** em tempo real
+- 📚 **Exemplos de consultas** prontos para usar
+- ⚙️ **Configuração de filtros** visual
+- 📈 **Estatísticas** de uso e cache
+
+**📸 Screenshot:** Interface com tema dark terminal, fonte monospace, e comandos interativos.
+
+## 🐳 Deploy em Produção
+
+### Deploy Rápido com Docker
+
+```bash
+docker-compose up -d
+```
+
+### Deploy em VPS com Portainer e Traefik
+
+**Manual completo:** [`DEPLOY_VPS.md`](DEPLOY_VPS.md)
+
+Incluindo:
+- ✅ Configuração com Portainer
+- ✅ SSL automático via Traefik + Let's Encrypt
+- ✅ Domínio personalizado
+- ✅ Monitoramento e logs
+- ✅ Auto-restart em falhas
+
+## 🚀 Configuração Local
 
 ### 1. Criar Bot no Discord
 
