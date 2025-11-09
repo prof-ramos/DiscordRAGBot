@@ -5,6 +5,7 @@ through a web interface.
 """
 
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -212,10 +213,25 @@ async def process_query(request: QueryRequestModel) -> QueryResponseModel:
 # Static Files
 # ============================================================================
 
-# Mount static files
-app.mount("/css", StaticFiles(directory="web/css"), name="css")
-app.mount("/js", StaticFiles(directory="web/js"), name="js")
-app.mount("/assets", StaticFiles(directory="web/assets"), name="assets")
+# Mount static files with existence checks
+css_dir = Path("web/css")
+js_dir = Path("web/js")
+assets_dir = Path("web/assets")
+
+if css_dir.exists():
+    app.mount("/css", StaticFiles(directory=str(css_dir)), name="css")
+else:
+    logger.warning(f"CSS directory not found: {css_dir}")
+
+if js_dir.exists():
+    app.mount("/js", StaticFiles(directory=str(js_dir)), name="js")
+else:
+    logger.warning(f"JS directory not found: {js_dir}")
+
+if assets_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+else:
+    logger.warning(f"Assets directory not found: {assets_dir}")
 
 
 # ============================================================================

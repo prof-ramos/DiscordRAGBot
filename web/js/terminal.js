@@ -164,40 +164,37 @@ async function handleSendQuery() {
 }
 
 async function sendQuery(question, filterLevel) {
-    // Simulated API call - replace with actual API when backend is ready
-    return new Promise((resolve, reject) => {
-        setTimeout(() => {
-            // Simulated response
-            resolve({
-                answer: `Esta é uma resposta simulada para a pergunta: "${question}".\n\nO bot está processando com o nível de filtro: ${filterLevel}.\n\nQuando a API REST estiver implementada, você receberá respostas reais baseadas nos documentos indexados no Supabase.`,
-                sources: [
-                    'documento1.pdf (página 5)',
-                    'documento2.pdf (página 12)',
-                    'documento3.pdf (página 3)',
-                ],
-            });
-        }, 1500);
-    });
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), CONFIG.REQUEST_TIMEOUT);
 
-    /* Real API call - uncomment when backend is ready
-    const response = await fetch(`${CONFIG.API_BASE_URL}/query`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            question,
-            filter_level: filterLevel,
-        }),
-        signal: AbortSignal.timeout(CONFIG.REQUEST_TIMEOUT),
-    });
+        const response = await fetch(`${CONFIG.API_BASE_URL}/query`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                question,
+                filter_level: filterLevel,
+            }),
+            signal: controller.signal,
+        });
 
-    if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status}`);
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || `Erro HTTP: ${response.status}`);
+        }
+
+        return await response.json();
+
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('Tempo limite de requisição excedido. Tente novamente.');
+        }
+        throw error;
     }
-
-    return await response.json();
-    */
 }
 
 // ============================================================================
@@ -266,36 +263,29 @@ async function checkBotStatus() {
 }
 
 async function getStatus() {
-    // Simulated API call - replace with actual API when backend is ready
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            resolve({
-                bot_online: true,
-                rag_loaded: true,
-                llm_model: 'minimax/minimax-m2:free',
-                cache_enabled: true,
-                cache_stats: {
-                    size: 42,
-                    max_size: 100,
-                    hit_rate: '88.89%',
-                },
-                documents_count: 127,
-            });
-        }, 500);
-    });
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    /* Real API call - uncomment when backend is ready
-    const response = await fetch(`${CONFIG.API_BASE_URL}/status`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000),
-    });
+        const response = await fetch(`${CONFIG.API_BASE_URL}/status`, {
+            method: 'GET',
+            signal: controller.signal,
+        });
 
-    if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status}`);
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
+
+        return await response.json();
+
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.warn('Status check timeout');
+        }
+        throw error;
     }
-
-    return await response.json();
-    */
 }
 
 function updateStatus(status) {
