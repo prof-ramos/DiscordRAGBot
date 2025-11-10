@@ -75,7 +75,7 @@ class LLMService:
             api_key=self.settings.openrouter_api_key,
             base_url="https://openrouter.ai/api/v1",
             temperature=self.settings.llm_temperature,
-            model_kwargs={"max_tokens": self.settings.llm_max_tokens},
+            max_tokens=self.settings.llm_max_tokens,
         )
 
         self.logger.info(
