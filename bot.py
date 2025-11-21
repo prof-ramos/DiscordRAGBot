@@ -25,6 +25,18 @@ from src.logging_config import get_logger
 load_dotenv()
 
 
+async def setup_admin_commands(bot: DiscordRAGBot) -> None:
+    """Setup admin commands."""
+    try:
+        from src.bot.admin_commands import setup as setup_admin
+        await setup_admin(bot)
+    except Exception as e:
+        bot.logger.warning(
+            f"Failed to setup admin commands: {e}",
+            action="STARTUP"
+        )
+
+
 def main() -> None:
     """Main entry point for the bot."""
     try:
@@ -44,6 +56,10 @@ def main() -> None:
         # Register commands and handlers
         setup_commands(bot)
         setup_handlers(bot)
+
+        # Register admin commands (async)
+        import asyncio
+        asyncio.run(setup_admin_commands(bot))
 
         # Run bot
         logger.info(

@@ -165,6 +165,37 @@ class Settings(BaseSettings):
         description="Default content filter level",
     )
 
+    # Admin Configuration
+    admin_user_ids: list[int] = Field(
+        default_factory=list,
+        description="List of Discord user IDs with admin privileges",
+    )
+
+    @field_validator("admin_user_ids", mode="before")
+    @classmethod
+    def parse_admin_ids(cls, value) -> list[int]:
+        """Parse admin user IDs from comma-separated string or list.
+
+        Args:
+            value: Either a comma-separated string or a list of integers
+
+        Returns:
+            List of integer user IDs
+
+        Raises:
+            ValueError: If IDs cannot be parsed as integers
+        """
+        if isinstance(value, list):
+            return [int(v) for v in value]
+        if isinstance(value, str):
+            if not value.strip():
+                return []
+            try:
+                return [int(id.strip()) for id in value.split(",") if id.strip()]
+            except ValueError as e:
+                raise ValueError(f"Invalid admin user ID format: {e}")
+        return []
+
     @field_validator("data_dir", "logs_dir", mode="after")
     @classmethod
     def create_directories(cls, path: Path) -> Path:
