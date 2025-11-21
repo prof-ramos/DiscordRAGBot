@@ -5,7 +5,7 @@ processamento customizado, particularmente para dados estruturados como CSV e Ex
 """
 
 from pathlib import Path
-from typing import Iterator, List
+from typing import Iterator
 
 import pandas as pd
 from langchain_core.documents import Document
@@ -44,7 +44,7 @@ class CSVLoader:
         self.include_headers = include_headers
         self.source_column = source_column
 
-    def load(self) -> List[Document]:
+    def load(self) -> list[Document]:
         """Carrega e analisa o arquivo CSV.
 
         Returns:
@@ -167,7 +167,7 @@ class ExcelLoader:
         self.include_headers = include_headers
         self.source_column = source_column
 
-    def load(self) -> List[Document]:
+    def load(self) -> list[Document]:
         """Carrega e analisa o arquivo Excel.
 
         Returns:
@@ -299,7 +299,7 @@ class MultiSheetExcelLoader:
         self.include_headers = include_headers
         self.source_column = source_column
 
-    def load(self) -> List[Document]:
+    def load(self) -> list[Document]:
         """Carrega e analisa todas as planilhas do arquivo Excel.
 
         Returns:

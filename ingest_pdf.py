@@ -4,13 +4,13 @@ PDF Ingestion Script for Knowledge Base
 Ingere PDFs na base de conhecimento com controle de duplicatas.
 """
 
-import os
-import json
 import argparse
 import hashlib
+import json
+import os
 import time
-from typing import List, Dict, Any, Optional
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from pypdf import PdfReader
@@ -163,8 +163,23 @@ def extract_text_from_pdf(pdf_path: str) -> str:
 # ============================================================
 
 def get_embedding(text: str, model: str = EMBEDDING_MODEL, max_retries: int = 3) -> List[float]:
-    """Gera embedding com retry em caso de falha transiente."""
+    """Gera embedding com retry em caso de falha transiente.
+
+    Args:
+        text: Texto para gerar embedding
+        model: Modelo de embedding a usar
+        max_retries: Número máximo de tentativas
+
+    Returns:
+        Lista de floats representando o embedding (nunca None)
+
+    Raises:
+        RuntimeError: Se todas as tentativas falharem ou embedding for inválido
+    """
     text = text.replace("\n", " ").strip()
+
+    if not text:
+        raise ValueError("❌ Texto vazio fornecido para geração de embedding")
 
     for attempt in range(max_retries):
         try:
@@ -172,7 +187,24 @@ def get_embedding(text: str, model: str = EMBEDDING_MODEL, max_retries: int = 3)
                 input=[text],
                 model=model
             )
-            return response.data[0].embedding
+
+            # CRITICAL: Validar resposta antes de retornar
+            if not response or not response.data or len(response.data) == 0:
+                raise ValueError("❌ Resposta da API OpenAI vazia ou inválida")
+
+            embedding = response.data[0].embedding
+
+            if embedding is None:
+                raise ValueError("❌ API OpenAI retornou embedding=None")
+
+            if not isinstance(embedding, list) or len(embedding) == 0:
+                raise ValueError(
+                    f"❌ Embedding inválido: esperado lista não-vazia, "
+                    f"recebido {type(embedding).__name__}"
+                )
+
+            return embedding
+
         except Exception as e:
             if attempt < max_retries - 1:
                 wait_time = 2 ** attempt
@@ -180,14 +212,19 @@ def get_embedding(text: str, model: str = EMBEDDING_MODEL, max_retries: int = 3)
                 print(f"   Aguardando {wait_time}s antes de tentar novamente...")
                 time.sleep(wait_time)
             else:
-                raise RuntimeError(f"❌ Falha ao gerar embedding após {max_retries} tentativas: {e}")
+                raise RuntimeError(
+                    f"❌ Falha ao gerar embedding após {max_retries} tentativas: {e}\n"
+                    f"   Texto (primeiros 100 chars): {text[:100]}..."
+                )
 
 
 # ============================================================
 # Supabase – inserção nas tabelas kb_*
 # ============================================================
 
-def get_or_create_collection(name: str, description: str = "", metadata: dict | None = None) -> str:
+def get_or_create_collection(
+    name: str, description: str = "", metadata: Optional[Dict[str, Any]] = None
+) -> str:
     """Retorna o id da collection. Se não existir, cria."""
     metadata = metadata or {}
 
@@ -218,7 +255,7 @@ def get_or_create_collection(name: str, description: str = "", metadata: dict | 
 def find_existing_document(
     collection_id: str,
     external_id: str,
-) -> dict | None:
+) -> Optional[Dict[str, Any]]:
     """
     Retorna o documento existente (se houver) para a combinação
     (collection_id, external_id).
@@ -241,10 +278,10 @@ def create_document(
     collection_id: str,
     title: str,
     doc_type: str = "pdf",
-    source_url: str | None = None,
-    external_id: str | None = None,
-    content_hash: str | None = None,
-    metadata: dict | None = None
+    source_url: Optional[str] = None,
+    external_id: Optional[str] = None,
+    content_hash: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Cria um novo documento na base."""
     metadata = metadata or {}
@@ -270,9 +307,14 @@ def create_document(
 def insert_chunks(
     document_id: str,
     chunks: List[Dict[str, Any]],
-    batch_size: int = 10
-):
-    """Insere chunks na tabela kb_chunks (com embedding)."""
+    batch_size: int = 10,
+) -> None:
+    """Insere chunks na tabela kb_chunks (com embedding).
+
+    Raises:
+        RuntimeError: Se qualquer embedding falhar ou for None
+        ValueError: Se embeddings inválidos forem detectados
+    """
     total_chunks = len(chunks)
     print(f"💾 Inserindo {total_chunks} chunks em lotes de {batch_size}...")
 
@@ -285,7 +327,29 @@ def insert_chunks(
             token_count = ch["token_count"]
             index = ch["index"]
 
-            embedding = get_embedding(content)
+            # Gera embedding com retry automático
+            try:
+                embedding = get_embedding(content)
+            except Exception as e:
+                raise RuntimeError(
+                    f"❌ Falha crítica ao gerar embedding para chunk {index}: {e}\n"
+                    f"   Documento não será marcado como indexado."
+                )
+
+            # CRITICAL: Validar que embedding foi gerado com sucesso
+            if embedding is None:
+                raise ValueError(
+                    f"❌ Embedding retornou None para chunk {index}.\n"
+                    f"   Isso pode indicar rate-limit ou erro silencioso da OpenAI.\n"
+                    f"   Documento não será marcado como indexado."
+                )
+
+            if not isinstance(embedding, list) or len(embedding) == 0:
+                raise ValueError(
+                    f"❌ Embedding inválido para chunk {index}: "
+                    f"esperado lista não-vazia, recebido {type(embedding).__name__}.\n"
+                    f"   Documento não será marcado como indexado."
+                )
 
             rows.append({
                 "document_id": document_id,
@@ -304,7 +368,7 @@ def insert_chunks(
         print(f"   ✅ Lote {i // batch_size + 1}/{(total_chunks + batch_size - 1) // batch_size} inserido ({len(rows)} chunks)")
 
 
-def mark_document_indexed(document_id: str, content_hash: str, total_chunks: int):
+def mark_document_indexed(document_id: str, content_hash: str, total_chunks: int) -> None:
     """Marca documento como indexado e atualiza metadata."""
     existing = supabase.table("kb_documents").select("metadata").eq("id", document_id).single().execute()
     current_meta = existing.data.get("metadata", {}) if existing.data else {}
@@ -331,14 +395,14 @@ def mark_document_indexed(document_id: str, content_hash: str, total_chunks: int
 def ingest_pdf(
     pdf_path: str,
     collection_name: str,
-    collection_description: str | None = None,
-    document_title: str | None = None,
+    collection_description: Optional[str] = None,
+    document_title: Optional[str] = None,
     document_type: str = "pdf",
-    document_metadata: dict | None = None,
+    document_metadata: Optional[Dict[str, Any]] = None,
     chunk_max_tokens: int = 500,
     chunk_overlap_tokens: int = 50,
-    force_reindex: bool = False
-):
+    force_reindex: bool = False,
+) -> str:
     """Ingere PDF na base de conhecimento com controle de duplicatas."""
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"❌ PDF não encontrado: {pdf_path}")
@@ -420,7 +484,17 @@ def ingest_pdf(
         )
         print(f"   ✅ Documento criado (id: {document_id})")
 
-    insert_chunks(document_id, chunks)
+    # CRITICAL: Só marcar como indexado se TODOS os embeddings forem gerados com sucesso
+    try:
+        insert_chunks(document_id, chunks)
+    except (RuntimeError, ValueError) as e:
+        print(f"\n❌ ERRO CRÍTICO durante geração de embeddings:")
+        print(f"   {e}")
+        print(f"\n⚠️  Documento NÃO foi marcado como indexado (is_indexed=False)")
+        print(f"   Chunks podem estar parcialmente inseridos no banco.")
+        print(f"   Para reprocessar, execute novamente com o mesmo PDF.")
+        print(f"   Document ID: {document_id}")
+        raise  # Re-raise para interromper execução
 
     print("✅ Marcando documento como indexado...")
     mark_document_indexed(document_id, file_hash, len(chunks))
@@ -437,7 +511,7 @@ def ingest_pdf(
 # CLI
 # ============================================================
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(
         description="Ingestão de PDF para Supabase (RAG) com controle de duplicatas.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
