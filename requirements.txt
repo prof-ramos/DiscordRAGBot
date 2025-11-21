@@ -51,3 +51,6 @@ black>=23.0.0
 
 # Type Stubs
 types-requests
+
+# Batch Processing
+tqdm>=4.66.0  # Progress bars for batch ingestion

@@ -165,6 +165,12 @@ class Settings(BaseSettings):
         description="Default content filter level",
     )
 
+    # Admin Configuration
+    admin_user_ids: str = Field(
+        default="",
+        description="Comma-separated list of Discord user IDs with admin privileges",
+    )
+
     @field_validator("data_dir", "logs_dir", mode="after")
     @classmethod
     def create_directories(cls, path: Path) -> Path:
