@@ -5,17 +5,16 @@ Processa múltiplos PDFs em um diretório e ingere na base de conhecimento.
 """
 
 import os
-import sys
 import glob
 import json
 import argparse
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Importar funções do ingest_pdf.py
-from ingest_pdf import ingest_pdf, calculate_file_hash
+from ingest_pdf import ingest_pdf
 
 # Para barra de progresso
 try:
@@ -38,6 +37,13 @@ class IngestionReport:
         self.end_time = None
 
     def add_success(self, file_path: str, document_id: str, chunks: int):
+        """Adiciona arquivo processado com sucesso ao relatório.
+
+        Args:
+            file_path: Caminho do arquivo processado
+            document_id: ID do documento criado no banco
+            chunks: Número de chunks gerados
+        """
         self.successful.append({
             "file": file_path,
             "document_id": document_id,
@@ -46,6 +52,12 @@ class IngestionReport:
         })
 
     def add_skipped(self, file_path: str, reason: str):
+        """Adiciona arquivo pulado ao relatório.
+
+        Args:
+            file_path: Caminho do arquivo pulado
+            reason: Motivo pelo qual foi pulado
+        """
         self.skipped.append({
             "file": file_path,
             "reason": reason,
@@ -53,6 +65,12 @@ class IngestionReport:
         })
 
     def add_failed(self, file_path: str, error: str):
+        """Adiciona arquivo com falha ao relatório.
+
+        Args:
+            file_path: Caminho do arquivo que falhou
+            error: Mensagem de erro
+        """
         self.failed.append({
             "file": file_path,
             "error": str(error),
@@ -60,6 +78,7 @@ class IngestionReport:
         })
 
     def finalize(self):
+        """Finaliza o relatório marcando timestamp de término."""
         self.end_time = datetime.now()
 
     def print_summary(self):

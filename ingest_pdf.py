@@ -9,12 +9,13 @@ import json
 import argparse
 import hashlib
 import time
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pathlib import Path
 
 from dotenv import load_dotenv
 from pypdf import PdfReader
 import tiktoken
+from tiktoken.core import Encoding
 from openai import OpenAI
 from supabase import create_client, Client
 
@@ -54,8 +55,15 @@ def calculate_file_hash(file_path: str) -> str:
     return sha256_hash.hexdigest()
 
 
-def get_tokenizer(model: str = EMBEDDING_MODEL):
-    """Retorna um tokenizer compatível com o modelo de embedding."""
+def get_tokenizer(model: str = EMBEDDING_MODEL) -> Encoding:
+    """Retorna um tokenizer compatível com o modelo de embedding.
+
+    Args:
+        model: Nome do modelo de embedding
+
+    Returns:
+        Encoding do tiktoken
+    """
     try:
         enc = tiktoken.encoding_for_model(model)
     except KeyError:
@@ -63,7 +71,16 @@ def get_tokenizer(model: str = EMBEDDING_MODEL):
     return enc
 
 
-def count_tokens(text: str, tokenizer) -> int:
+def count_tokens(text: str, tokenizer: Encoding) -> int:
+    """Conta tokens em um texto.
+
+    Args:
+        text: Texto para contar tokens
+        tokenizer: Tokenizer tiktoken
+
+    Returns:
+        Número de tokens
+    """
     return len(tokenizer.encode(text))
 
 
@@ -71,14 +88,33 @@ def chunk_text(
     text: str,
     max_tokens: int = 500,
     overlap_tokens: int = 50,
-    tokenizer=None
+    tokenizer: Optional[Encoding] = None
 ) -> List[Dict[str, Any]]:
     """
     Divide o texto em chunks de até max_tokens, com overlap entre eles.
     Retorna uma lista de dicts: { "content": str, "token_count": int, "index": int }
+
+    Args:
+        text: Texto a ser dividido em chunks
+        max_tokens: Tamanho máximo de cada chunk em tokens
+        overlap_tokens: Número de tokens de overlap entre chunks
+        tokenizer: Tokenizer a ser usado (opcional)
+
+    Returns:
+        Lista de dicts com content, token_count e index
+
+    Raises:
+        ValueError: Se overlap_tokens >= max_tokens
     """
     if tokenizer is None:
         tokenizer = get_tokenizer()
+
+    # CRITICAL: Prevenir infinite loop validando overlap
+    if overlap_tokens >= max_tokens:
+        raise ValueError(
+            f"overlap_tokens ({overlap_tokens}) must be less than max_tokens ({max_tokens}). "
+            f"Recommended: overlap_tokens <= max_tokens * 0.2"
+        )
 
     tokens = tokenizer.encode(text)
     chunks = []

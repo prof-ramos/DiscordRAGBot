@@ -8,6 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 from typing import Optional
 from datetime import datetime
+from postgrest import CountMethod
 
 from src.config import get_settings
 from src.logging_config import get_logger
@@ -15,21 +16,41 @@ from src.logging_config import get_logger
 
 # Lista de IDs de usuários admin
 def get_admin_user_ids() -> set[int]:
-    """Obtém lista de IDs de usuários admin."""
+    """Obtém lista de IDs de usuários admin.
+
+    Lê a configuração ADMIN_USER_IDS do .env e retorna como conjunto.
+
+    Returns:
+        Conjunto de IDs de usuários Discord com permissões admin.
+        Retorna conjunto vazio se nenhum admin estiver configurado.
+    """
     settings = get_settings()
-    admin_ids_str = getattr(settings, "admin_user_ids", "")
-    if not admin_ids_str:
-        return set()
-    return set(map(int, admin_ids_str.split(",")))
+    return set(settings.admin_user_ids)
 
 
 def is_admin(user_id: int) -> bool:
-    """Verifica se usuário é admin."""
+    """Verifica se usuário é admin.
+
+    Args:
+        user_id: ID do usuário Discord
+
+    Returns:
+        True se o usuário está na lista de admins, False caso contrário.
+    """
     return user_id in get_admin_user_ids()
 
 
 async def check_admin_permission(interaction: discord.Interaction) -> bool:
-    """Verifica permissão de admin antes de executar comando."""
+    """Verifica permissão de admin antes de executar comando.
+
+    Envia mensagem de erro efêmera ao usuário se não tiver permissão.
+
+    Args:
+        interaction: Interação Discord do comando
+
+    Returns:
+        True se usuário tem permissão admin, False caso contrário.
+    """
     if not is_admin(interaction.user.id):
         await interaction.response.send_message(
             "❌ Você não tem permissão para usar este comando.",
@@ -40,9 +61,18 @@ async def check_admin_permission(interaction: discord.Interaction) -> bool:
 
 
 class AdminCommands(commands.Cog):
-    """Cog com comandos administrativos."""
+    """Cog com comandos administrativos.
+
+    Fornece comandos Discord para gerenciar a base de conhecimento,
+    incluindo listagem de coleções, estatísticas e reindexação.
+    """
 
     def __init__(self, bot: commands.Bot):
+        """Inicializa o cog de comandos administrativos.
+
+        Args:
+            bot: Instância do bot Discord
+        """
         self.bot = bot
         self.settings = get_settings()
         self.logger = get_logger()
@@ -55,8 +85,15 @@ class AdminCommands(commands.Cog):
         name="admin_list_collections",
         description="[ADMIN] Listar todas as coleções da base de conhecimento"
     )
-    async def list_collections(self, interaction: discord.Interaction):
-        """Lista todas as coleções disponíveis."""
+    async def list_collections(self, interaction: discord.Interaction) -> None:
+        """Lista todas as coleções disponíveis.
+
+        Exibe um embed com todas as coleções da base de conhecimento,
+        mostrando nome, descrição, número de documentos e ID.
+
+        Args:
+            interaction: Interação Discord do comando
+        """
         if not await check_admin_permission(interaction):
             return
 
@@ -78,7 +115,7 @@ class AdminCommands(commands.Cog):
             collections_data = []
             for coll in result.data:
                 docs_res = self.supabase_service.client.table("kb_documents")\
-                    .select("id", count="exact")\
+                    .select("id", count=CountMethod.exact)\
                     .eq("collection_id", coll["id"])\
                     .eq("is_active", True)\
                     .execute()
@@ -142,8 +179,16 @@ class AdminCommands(commands.Cog):
         self,
         interaction: discord.Interaction,
         colecao: str
-    ):
-        """Mostra estatísticas detalhadas de uma coleção."""
+    ) -> None:
+        """Mostra estatísticas detalhadas de uma coleção.
+
+        Exibe informações como número de documentos, chunks, tokens,
+        custo estimado de embeddings e top 10 documentos.
+
+        Args:
+            interaction: Interação Discord do comando
+            colecao: Nome da coleção para exibir estatísticas
+        """
         if not await check_admin_permission(interaction):
             return
 
@@ -175,13 +220,25 @@ class AdminCommands(commands.Cog):
             active_docs = [d for d in documents if d.get("is_active", False)]
             indexed_docs = [d for d in documents if d.get("is_indexed", False)]
 
-            chunks_res = self.supabase_service.client.table("kb_chunks")\
-                .select("id, token_count", count="exact")\
-                .in_("document_id", [d["id"] for d in documents])\
-                .execute()
+            # Guard against empty document list to prevent PostgreSQL error
+            if documents:
+                chunks_res = self.supabase_service.client.table("kb_chunks")\
+                    .select("id, document_id, token_count", count=CountMethod.exact)\
+                    .in_("document_id", [d["id"] for d in documents])\
+                    .execute()
+                total_chunks = chunks_res.count or 0
+                chunks_data = chunks_res.data or []
+                total_tokens = sum(chunk.get("token_count", 0) for chunk in chunks_data)
 
-            total_chunks = chunks_res.count or 0
-            total_tokens = sum(chunk.get("token_count", 0) for chunk in (chunks_res.data or []))
+                # Build document_id -> chunk count mapping to avoid N+1 queries
+                from collections import defaultdict
+                doc_chunk_counts: dict[str, int] = defaultdict(int)
+                for chunk in chunks_data:
+                    doc_chunk_counts[chunk["document_id"]] += 1
+            else:
+                total_chunks = 0
+                total_tokens = 0
+                doc_chunk_counts = {}
 
             embedding_cost = (total_tokens / 1_000_000) * 0.02
 
@@ -216,18 +273,15 @@ class AdminCommands(commands.Cog):
             )
 
             if documents:
-                docs_with_chunks = []
-                for doc in documents[:10]:
-                    doc_chunks_res = self.supabase_service.client.table("kb_chunks")\
-                        .select("id", count="exact")\
-                        .eq("document_id", doc["id"])\
-                        .execute()
-
-                    docs_with_chunks.append({
+                # Use pre-fetched chunk counts to avoid N+1 queries
+                docs_with_chunks = [
+                    {
                         "title": doc["title"],
-                        "chunks": doc_chunks_res.count or 0,
+                        "chunks": doc_chunk_counts.get(doc["id"], 0),
                         "indexed": doc.get("is_indexed", False)
-                    })
+                    }
+                    for doc in documents
+                ]
 
                 docs_with_chunks.sort(key=lambda x: x["chunks"], reverse=True)
 
@@ -277,8 +331,16 @@ class AdminCommands(commands.Cog):
         self,
         interaction: discord.Interaction,
         documento_id: str
-    ):
-        """Força reindexação de um documento específico."""
+    ) -> None:
+        """Força reindexação de um documento específico.
+
+        Remove chunks antigos e marca documento como não indexado,
+        fornecendo comando para reprocessamento manual.
+
+        Args:
+            interaction: Interação Discord do comando
+            documento_id: ID do documento (primeiros 8 caracteres são suficientes)
+        """
         if not await check_admin_permission(interaction):
             return
 
@@ -364,6 +426,6 @@ class AdminCommands(commands.Cog):
             )
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     """Setup function para adicionar cog."""
     await bot.add_cog(AdminCommands(bot))
