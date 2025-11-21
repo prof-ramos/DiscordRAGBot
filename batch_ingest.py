@@ -4,14 +4,14 @@ Batch PDF Ingestion Script
 Processa múltiplos PDFs em um diretório e ingere na base de conhecimento.
 """
 
-import os
+import argparse
 import glob
 import json
-import argparse
-from pathlib import Path
-from typing import List, Dict, Any, Optional
-from datetime import datetime
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
 
 # Importar funções do ingest_pdf.py
 from ingest_pdf import ingest_pdf
